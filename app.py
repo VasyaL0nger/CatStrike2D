@@ -46,7 +46,7 @@ with tab_g:
     game_html = f"""
     <!DOCTYPE html><html><head><style>
         body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; }}
-        canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; display:none; margin:5px auto; }}
+        canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; margin:5px auto; }}
         .box {{ max-width:450px; margin:10px auto; background:#0f172a; padding:15px; border-radius:12px; border:2px solid #22c55e; }}
         .btn {{ background:#1e293b; color:white; border:1px solid #475569; padding:10px; margin:4px; border-radius:6px; cursor:pointer; width:95%; }}
         .btn:hover {{ background:#16a34a; }}
@@ -59,7 +59,7 @@ with tab_g:
             <button class="btn" onclick="start('Rizyk','🐱',6,90)">🐱 Rizyk (90 HP)</button>
             <button class="btn" onclick="start('Tomas','🐱',5,120)">🐱 Tomas (120 HP)</button>
         </div>
-        <canvas id="arena" width="650" height="350"></canvas>
+        <canvas id="arena" width="650" height="350" style="display:none;"></canvas>
         <script>
             const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
             let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:''}}, keys={{}}, bullets=[], enemies=[], score=0, isPlay=false;
@@ -88,7 +88,6 @@ with tab_g:
                 ctx.font="30px Arial"; 
                 ctx.fillText("МАТЧ ЗАВЕРШЕН",200,180); 
                 
-                # ИСПРАВЛЕНО: Полное жесткое перенаправление верхнего окна (Streamlit) без зависаний
                 setTimeout(()=>{{
                     window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?end_match=1";
                 }}, 600); 
