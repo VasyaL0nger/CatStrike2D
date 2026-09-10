@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import time
+import os
+import json
 
 # Настройка страницы шутера
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
@@ -12,11 +13,30 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Инициализация вашей кастомной экономики
-if 'food' not in st.session_state: st.session_state.food = 0
-if 'current_rank' not in st.session_state: st.session_state.current_rank = "начальный"
+# --- СИСТЕМА НАДЁЖНОГО СОХРАНЕНИЯ ПРОГРЕССА (ПРОФИЛЬ) ---
+SAVE_FILE = "save_data.json"
 
-# Сетка рангов, которую вы придумали
+def load_game():
+    if os.path.exists(SAVE_FILE):
+        try:
+            with open(SAVE_FILE, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"food": 0, "current_rank": "начальный"}
+
+def save_game(food, rank):
+    with open(SAVE_FILE, "w") as f:
+        json.dump({"food": food, "current_rank": rank}, f)
+
+# Загружаем сохраненный прогресс при старте сайта
+if 'save_init' not in st.session_state:
+    saved_data = load_game()
+    st.session_state.food = saved_data["food"]
+    st.session_state.current_rank = saved_data["current_rank"]
+    st.session_state.save_init = True
+
+# Сетка рангов
 RANKS_DICT = {
     "начальный": 0,
     "котенок": 5000,
@@ -30,9 +50,12 @@ RANKS_DICT = {
     "вася": 50000
 }
 
-# Определение множителя скорости врагов (сложности) на основе ранга
-rank_index = list(RANKS_DICT.keys()).index(st.session_state.current_rank)
-difficulty_speed_bonus = rank_index * 0.4  # Чем выше ранг, тем быстрее враги в JS
+# Определение множителя сложности
+rank_list = list(RANKS_DICT.keys())
+if st.session_state.current_rank not in rank_list:
+    st.session_state.current_rank = "начальный"
+current_idx = rank_list.index(st.session_state.current_rank)
+difficulty_speed_bonus = current_idx * 0.4
 
 st.title("🐱 CatStrike 2D 🔫")
 
@@ -40,11 +63,8 @@ st.title("🐱 CatStrike 2D 🔫")
 st.sidebar.markdown(f"## 🍖 Баланс: `{st.session_state.food}` еды")
 st.sidebar.markdown(f"## 🎖️ Ваш Ранг: **{st.session_state.current_rank.upper()}**")
 
-# Кнопка ручной прокачки ранга за еду
 st.sidebar.write("---")
 st.sidebar.subheader("Повышение звания")
-rank_list = list(RANKS_DICT.keys())
-current_idx = rank_list.index(st.session_state.current_rank)
 
 if current_idx < len(rank_list) - 1:
     next_rank = rank_list[current_idx + 1]
@@ -57,6 +77,7 @@ if current_idx < len(rank_list) - 1:
         else:
             st.session_state.food -= cost_next
             st.session_state.current_rank = next_rank
+            save_game(st.session_state.food, st.session_state.current_rank) # Сохраняем файл
             st.sidebar.success(f"Ранг повышен до {next_rank.upper()}!")
             st.rerun()
 else:
@@ -67,19 +88,19 @@ tab_game, tab_profile = st.tabs(["🎮 Арена Боя", "👤 Профиль 
 
 # ================= ВКЛАДКА 1: МАТЧ И АРЕНА =================
 with tab_game:
-    # ИСПРАВЛЕНО: Текст изменен под планку в 500 очков
     st.write("Цель матча: набрать **500 очков**. За каждый выход или проигрыш выдается **100 еды**!")
     
     # Ловим результаты из JavaScript-игры
     query_params = st.query_params
     if "end_match" in query_params:
         st.session_state.food += 100
+        save_game(st.session_state.food, st.session_state.current_rank) # Сохраняем добычу в файл
         st.query_params.clear()
-        st.success("Матч завершен! Вам начислено 🍖 100 еды в инвентарь!")
+        st.success("Матч завершен! Вам начислено 🍖 100 еды. Данные сохранены!")
         st.balloons()
         st.rerun()
 
-    # Встраиваем игровой движок с новой планкой очков
+    # Встраиваем игровой движок со стабильной фиксацией конца матча
     game_html = f"""
     <!DOCTYPE html>
     <html>
@@ -126,8 +147,11 @@ with tab_game:
             function shoot() {{ if (!isPlay) return; bullets.push({{ x: p.x + 15, y: p.y + 8, speed: 10, size: 6 }}); }}
 
             function finishMatch() {{
+                if (!isPlay) return;
                 isPlay = false;
-                window.parent.location.search = "?end_match=1";
+                setTimeout(() => {{
+                    window.parent.location.search = "?end_match=1";
+                }}, 200);
             }}
 
             function loop() {{
@@ -164,7 +188,6 @@ with tab_game:
                         if (b.x > e.x && b.x < e.x + 30 && b.y > e.y && b.y < e.y + 30) {{
                             bullets.splice(bIdx, 1); enemies.splice(eIdx, 1);
                             score += 10;
-                            // ИСПРАВЛЕНО: Победа теперь засчитывается при 500 очках!
                             if (score >= 500) finishMatch();
                         }}
                     }});
@@ -200,9 +223,10 @@ with tab_profile:
             </div>
         """, unsafe_allow_html=True)
 
-# Кнопка читерского теста для начисления еды
+# Читерская кнопка
 if st.sidebar.button("🧪 Тест: Выдать +5000 еды"):
     st.session_state.food += 5000
+    save_game(st.session_state.food, st.session_state.current_rank)
     st.rerun()
 
 
