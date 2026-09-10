@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os, json
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
@@ -36,10 +37,8 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    # ЛОВИМ СИГНАЛЫ ИЗ ИГРЫ ЧЕРЕЗ АДРЕСНУЮ СТРОКУ
     status = st.query_params.get("status", None)
     
-    # ЕСЛИ МАТЧ ОКОНЧЕН — ПОКАЗЫВАЕМ НАДЕЖНЫЕ КНОПКИ ВЫХОДА НА САЙТЕ
     if status == "win":
         if st.button("🟢 ЗАБРАТЬ +100 ЕДЫ (ПОБЕДА!)", use_container_width=True):
             st.session_state.food += 100
@@ -51,7 +50,6 @@ with tab_g:
             st.query_params.clear()
             st.rerun()
             
-    # ЕСЛИ ИГРОК ЕЩЕ ИГРАЕТ ИЛИ ТОЛЬКО ЗАШЕЛ — ПОКАЗЫВАЕМ ОКНО ИГРЫ
     else:
         game_html = f"""
         <!DOCTYPE html><html><head><style>
