@@ -1,10 +1,8 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import os, json
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
-# --- СИСТЕМА СОХРАНЕНИЯ ПРОГРЕССА ---
 SAVE_FILE = "save_data.json"
 def load_game():
     if os.path.exists(SAVE_FILE):
@@ -16,6 +14,10 @@ if 'save_init' not in st.session_state:
     saved = load_game()
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
+
+# Инициализируем статус матча в памяти Streamlit
+if 'match_status' not in st.session_state:
+    st.session_state.match_status = "playing"
 
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 rank_list = list(RANKS.keys())
@@ -37,20 +39,30 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    status = st.query_params.get("status", None)
+    # Проверяем, пришел ли скрытый сигнал об окончании игры из HTML/JS компонента
+    html_status = st.components.v1.html("", height=0) # Заглушка под будущий мост данных
     
-    if status == "win":
+    # Считываем переключатель матча
+    if st.session_state.match_status == "win":
+        st.balloons()
         if st.button("🟢 ЗАБРАТЬ +100 ЕДЫ (ПОБЕДА!)", use_container_width=True):
             st.session_state.food += 100
             json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-            st.query_params.clear()
+            st.session_state.match_status = "playing"
             st.rerun()
-    elif status == "lose":
+            
+    elif st.session_state.match_status == "lose":
         if st.button("🔴 ВЕРНУТЬСЯ В ГЛАВНОЕ МЕНЮ (ПРОИГРЫШ)", use_container_width=True):
-            st.query_params.clear()
+            st.session_state.match_status = "playing"
             st.rerun()
             
     else:
+        # Логика приема данных через скрытый URL-параметр, который теперь ловится стабильно
+        if "status" in st.query_params:
+            st.session_state.match_status = st.query_params["status"]
+            st.query_params.clear()
+            st.rerun()
+
         game_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; user-select:none; }}
@@ -84,14 +96,20 @@ with tab_g:
                 window.addEventListener("keyup",(e)=>{{ keys[e.code] = false; }});
                 canvas.addEventListener("mousedown",()=>{{ if(isPlay && cooldownTimer<=0) shoot(); }});
                 function shoot() {{ bullets.push({{x:p.x+15, y:p.y+8, speed:12}}); cooldownTimer = p.shootCooldown; }}
+                
+                # ЖЕЛЕЗНЫЙ ВЫХОД: Используем топ-уровень окна для гарантированной смены состояния
                 function finish(result) {{ 
                     if(!isPlay) return; isPlay = false; 
                     ctx.fillStyle="rgba(15, 23, 42, 0.85)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
                     ctx.fillStyle = result === "win" ? "#22c55e" : "#ef4444";
                     ctx.font="bold 30px Arial"; ctx.textAlign="center";
                     ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
-                    setTimeout(()=>{{ window.parent.location.search = "?status=" + result; }}, 700);
+                    
+                    setTimeout(()=>{{ 
+                        window.top.location.search = "?status=" + result; 
+                    }}, 600);
                 }}
+                
                 function loop() {{ 
                     if(!isPlay) return; requestAnimationFrame(loop); ctx.clearRect(0,0,canvas.width,canvas.height);
                     if(keys["KeyW"]||keys["ArrowUp"]) p.y-=p.speed; if(keys["KeyS"]||keys["ArrowDown"]) p.y+=p.speed; if(keys["KeyA"]||keys["ArrowLeft"]) p.x-=p.speed; if(keys["KeyD"]||keys["ArrowRight"]) p.x+=p.speed;
