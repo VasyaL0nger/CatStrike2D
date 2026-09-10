@@ -1,239 +1,100 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import os
-import json
+import os, json, random
 
-# Настройка страницы шутера
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
-st.markdown("""
-    <style>
-    .stApp { background-color: #020617; color: white; text-align: center; }
-    .rank-box { background-color: #0f172a; border: 2px solid #22c55e; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- СИСТЕМА НАДЁЖНОГО СОХРАНЕНИЯ ПРОГРЕССА (ПРОФИЛЬ) ---
 SAVE_FILE = "save_data.json"
-
 def load_game():
     if os.path.exists(SAVE_FILE):
-        try:
-            with open(SAVE_FILE, "r") as f:
-                return json.load(f)
-        except:
-            pass
+        try: return json.load(open(SAVE_FILE, "r"))
+        except: pass
     return {"food": 0, "current_rank": "начальный"}
 
-def save_game(food, rank):
-    with open(SAVE_FILE, "w") as f:
-        json.dump({"food": food, "current_rank": rank}, f)
-
-# Загружаем сохраненный прогресс при старте сайта
 if 'save_init' not in st.session_state:
-    saved_data = load_game()
-    st.session_state.food = saved_data["food"]
-    st.session_state.current_rank = saved_data["current_rank"]
+    saved = load_game()
+    st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
 
-# Сетка рангов
-RANKS_DICT = {
-    "начальный": 0,
-    "котенок": 5000,
-    "кот": 10000,
-    "питомец": 15000,
-    "любимец": 20000,
-    "томас": 25000,
-    "рыжик": 30000,
-    "буля": 35000,
-    "мурка": 40000,
-    "вася": 50000
-}
-
-# Определение множителя сложности
-rank_list = list(RANKS_DICT.keys())
-if st.session_state.current_rank not in rank_list:
-    st.session_state.current_rank = "начальный"
+RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
+rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
-difficulty_speed_bonus = current_idx * 0.4
+speed_bonus = current_idx * 0.4
 
-st.title("🐱 CatStrike 2D 🔫")
-
-# Боковая панель управления
-st.sidebar.markdown(f"## 🍖 Баланс: `{st.session_state.food}` еды")
-st.sidebar.markdown(f"## 🎖️ Ваш Ранг: **{st.session_state.current_rank.upper()}**")
-
-st.sidebar.write("---")
-st.sidebar.subheader("Повышение звания")
+st.sidebar.markdown(f"## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**")
 
 if current_idx < len(rank_list) - 1:
-    next_rank = rank_list[current_idx + 1]
-    cost_next = RANKS_DICT[next_rank]
-    st.sidebar.write(f"Следующий ранг: **{next_rank.upper()}**")
-    st.sidebar.write(f"Стоимость: `{cost_next}` еды")
-    if st.sidebar.button("🎖️ ПОВЫСИТЬ РАНГ"):
-        if st.session_state.food < cost_next:
-            st.sidebar.error("Не хватает еды для апгрейда ранга!")
-        else:
-            st.session_state.food -= cost_next
-            st.session_state.current_rank = next_rank
-            save_game(st.session_state.food, st.session_state.current_rank)
-            st.sidebar.success(f"Ранг повышен до {next_rank.upper()}!")
+    next_r = rank_list[current_idx + 1]
+    if st.sidebar.button(f"🎖️ АПНУТЬ РАНГ ЗА {RANKS[next_r]}"):
+        if st.session_state.food >= RANKS[next_r]:
+            st.session_state.food -= RANKS[next_r]
+            st.session_state.current_rank = next_r
+            json.dump({"food": st.session_state.food, "current_rank": next_r}, open(SAVE_FILE, "w"))
             st.rerun()
-else:
-    st.sidebar.success("👑 ВЫ ДОСТИГЛИ МАКСИМАЛЬНОГО РАНГА: ВАСЯ!")
+        else: st.sidebar.error("Не хватает еды!")
 
-# Главные вкладки хаба
-tab_game, tab_profile = st.tabs(["🎮 Арена Боя", "👤 Профиль и Ранги"])
+tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
-# ================= ВКЛАДКА 1: МАТЧ И АРЕНА =================
-with tab_game:
-    st.write("Цель матча: набрать **500 очков**. За каждый выход или проигрыш выдается **100 еды**!")
-    
-    # Ловим результаты из JavaScript-игры
-    query_params = st.query_params
-    if "end_match" in query_params:
+with tab_g:
+    if "end_match" in st.query_params:
         st.session_state.food += 100
-        save_game(st.session_state.food, st.session_state.current_rank)
+        json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
         st.query_params.clear()
-        st.success("Матч завершен! Вам начислено 🍖 100 еды. Прогресс сохранен!")
-        st.balloons()
+        st.success("Матч окончен! Начислено 🍖 100 еды!")
         st.rerun()
 
-    # Встраиваем игровой движок с защитой от бесконечных циклов при смерти
     game_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ margin: 0; background-color: #020617; color: white; font-family: Arial, sans-serif; text-align: center; overflow: hidden; }}
-            canvas {{ background-color: #090d16; border: 3px solid #22c55e; border-radius: 8px; display: block; margin: 5px auto; }}
-            .menu-box {{ max-width: 500px; margin: 10px auto; background: #0f172a; padding: 15px; border-radius: 12px; border: 2px solid #22c55e; }}
-            .btn {{ background: #1e293b; color: white; border: 1px solid #475569; padding: 10px; margin: 5px; border-radius: 6px; cursor: pointer; text-align: left; width: 95%; font-size: 14px; }}
-            .btn:hover {{ background: #16a34a; border-color: #4ade80; }}
-        </style>
-    </head>
-    <body>
-        <div id="charMenu" class="menu-box">
-            <h3>ВЫБЕРИТЕ КОТА (Сложность: +{difficulty_speed_bonus:.1f} скор.):</h3>
-            <button class="btn" onclick="start('Vasya', '🐱', 3.5, 150)">🐱 <b>Vasya</b> — Твой штурмовик. 150 HP.</button>
-            <button class="btn" onclick="start('Bulya', '🐱', 4, 100)">🐱 <b>Bulya</b> — Белая, нежная. 100 HP.</button>
-            <button class="btn" onclick="start('Murka', '🐱', 4.5, 110)">🐱 <b>Murka</b> — Черная, боевая. 110 HP.</button>
-            <button class="btn" onclick="start('Rizyk', '🐱', 6, 90)">🐱 <b>Rizyk</b> — Рыжий. Быстрый. 90 HP.</button>
-            <button class="btn" onclick="start('Tomas', '🐱', 5, 120)">🐱 <b>Tomas</b> — Полосатый друг Рыжика. 120 HP.</button>
+    <!DOCTYPE html><html><head><style>
+        body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; }}
+        canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; display:none; margin:5px auto; }}
+        .box {{ max-width:450px; margin:10px auto; background:#0f172a; padding:15px; border-radius:12px; border:2px solid #22c55e; }}
+        .btn {{ background:#1e293b; color:white; border:1px solid #475569; padding:10px; margin:4px; border-radius:6px; cursor:pointer; width:95%; }}
+        .btn:hover {{ background:#16a34a; }}
+    </style></head><body>
+        <div id="menu" class="box">
+            <h3>ВЫБЕРИТЕ КОТА (Бонус скорости врагов: +{speed_bonus:.1f}):</h3>
+            <button class="btn" onclick="start('Vasya','🐱',3.5,150)">🐱 Vasya (150 HP)</button>
+            <button class="btn" onclick="start('Bulya','🐱',4,100)">🐱 Bulya (100 HP)</button>
+            <button class="btn" onclick="start('Murka','🐱',4.5,110)">🐱 Murka (110 HP)</button>
+            <button class="btn" onclick="start('Rizyk','🐱',6,90)">🐱 Rizyk (90 HP)</button>
+            <button class="btn" onclick="start('Tomas','🐱',5,120)">🐱 Tomas (120 HP)</button>
         </div>
-
-        <canvas id="arena" width="680" height="360" style="display:none;"></canvas>
-
+        <canvas id="arena" width="650" height="350"></canvas>
         <script>
-            const canvas = document.getElementById("arena");
-            const ctx = canvas.getContext("2d");
-            let p = {{ x: 100, y: 180, size: 30, emoji: '🐱', speed: 4, name: '', hp: 100, maxHp: 100 }};
-            let keys = {{}}; let bullets = []; let enemies = []; let score = 0; let isPlay = false;
-            let alreadyFinished = false; // ЗАЩИТА: Флаг, предотвращающий повторный вызов конца игры
-            
-            let speedBonus = {difficulty_speed_bonus}; 
-
-            function start(name, emoji, speed, hp) {{
-                document.getElementById("charMenu").style.display = "none";
-                canvas.style.display = "block";
-                p.name = name; p.emoji = emoji; p.speed = speed; p.hp = hp; p.maxHp = hp;
-                isPlay = true; loop();
-            }}
-
-            window.addEventListener("keydown", (e) => {{ keys[e.code] = true; if(e.code === "Space") shoot(); }});
-            window.addEventListener("keyup", (e) => {{ keys[e.code] = false; }});
-            canvas.addEventListener("mousedown", shoot);
-
-            function shoot() {{ if (!isPlay) return; bullets.push({{ x: p.x + 15, y: p.y + 8, speed: 10, size: 6 }}); }}
-
-            function finishMatch() {{
-                if (alreadyFinished) return; // Если матч уже завершается, ничего не делаем
-                alreadyFinished = true;
-                isPlay = false; // Немедленно останавливаем игровой процесс
-                
-                ctx.fillStyle = "rgba(15, 23, 42, 0.8)";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = "white";
-                ctx.font = "bold 30px Arial";
-                ctx.textAlign = "center";
-                ctx.fillText("МАТЧ ЗАВЕРШЕН", canvas.width/2, canvas.height/2);
-                
-                setTimeout(() => {{
-                    window.parent.location.search = "?end_match=1";
-                }}, 800); // Даем анимации и тексту красиво отобразиться
-            }}
-
-            function loop() {{
-                if (!isPlay) return;
-                requestAnimationFrame(loop);
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                if (keys["KeyW"] || keys["ArrowUp"]) p.y -= p.speed;
-                if (keys["KeyS"] || keys["ArrowDown"]) p.y += p.speed;
-                if (keys["KeyA"] || keys["ArrowLeft"]) p.x -= p.speed;
-                if (keys["KeyD"] || keys["ArrowRight"]) p.x += p.speed;
-
-                p.x = Math.max(10, Math.min(canvas.width - 40, p.x));
-                p.y = Math.max(10, Math.min(canvas.height - 40, p.y));
-
-                ctx.font = p.size + "px Arial";
-                ctx.textAlign = "left";
-                ctx.fillText(p.emoji, p.x, p.y);
-
-                bullets.forEach((b, bIdx) => {{
-                    b.x += b.speed;
-                    ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2); ctx.fillStyle = "#22c55e"; ctx.fill();
-                    if (b.x > canvas.width) bullets.splice(bIdx, 1);
+            const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
+            let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:''}}, keys={{}}, bullets=[], enemies=[], score=0, isPlay=false, isEnd=false;
+            function start(n,e,s,h) {{ document.getElementById("menu").style.display="none"; canvas.style.display="block"; p.name=n; p.emoji=e; p.speed=s; p.hp=h; p.maxHp=h; isPlay=true; loop(); }}
+            window.addEventListener("keydown",(e)=>{{keys[e.code]=true; if(e.code==="Space")shoot();}});
+            window.addEventListener("keyup",(e)=>{{keys[e.code]=false;}});
+            canvas.addEventListener("mousedown",shoot);
+            function shoot() {{ if(isPlay) bullets.push({{x:p.x+15, y:p.y+8, speed:10}}); }}
+            function finish() {{ if(isEnd)return; isEnd=true; isPlay=false; ctx.fillStyle="rgba(0,0,0,0.7)"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.fillStyle="white"; ctx.font="30px Arial"; ctx.fillText("МАТЧ ЗАВЕРШЕН",200,180); setTimeout(()=>{{window.parent.location.search="?end_match=1";}},600); }}
+            function loop() {{ if(!isPlay)return; requestAnimationFrame(loop); ctx.clearRect(0,0,canvas.width,canvas.height);
+                if(keys["KeyW"]||keys["ArrowUp"]) p.y-=p.speed; if(keys["KeyS"]||keys["ArrowDown"]) p.y+=p.speed; if(keys["KeyA"]||keys["ArrowLeft"]) p.x-=p.speed; if(keys["KeyD"]||keys["ArrowRight"]) p.x+=p.speed;
+                p.x=Math.max(10,Math.min(canvas.width-40,p.x)); p.y=Math.max(10,Math.min(canvas.height-40,p.y));
+                ctx.font=p.size+"px Arial"; ctx.fillText(p.emoji,p.x,p.y);
+                bullets.forEach((b,idx)=>{{ b.x+=b.speed; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,Math.PI*2); ctx.fillStyle="#22c55e"; ctx.fill(); if(b.x>canvas.width)bullets.splice(idx,1); }});
+                if(Math.random()<0.025) enemies.push({{x:canvas.width, y:Math.random()*(canvas.height-50)+10, speed:Math.random()*1.5+2+{speed_bonus}}});
+                enemies.forEach((e,eIdx)=>{{ e.x-=e.speed; ctx.font="28px Arial"; ctx.fillText("🐀",e.x,e.y);
+                    bullets.forEach((b,bIdx)=>{{ if(b.x>e.x && b.x<e.x+30 && b.y>e.y && b.y<e.y+30){{ bullets.splice(bIdx,1); enemies.splice(eIdx,1); score+=10; if(score>=500)finish(); }} }});
+                    if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ enemies.splice(eIdx,1); p.hp-=20; if(p.hp<=0)finish(); }}
+                    if(e.x<-30)enemies.splice(eIdx,1);
                 }});
-
-                if (Math.random() < 0.025) {{
-                    enemies.push({{ x: canvas.width, y: Math.random() * (canvas.height - 50) + 10, speed: (Math.random() * 1.5 + 2) + speedBonus, size: 28 }});
-                }}
-
-                enemies.forEach((e, eIdx) => {{
-                    e.x -= e.speed;
-                    ctx.font = e.size + "px Arial"; ctx.fillText("🐀", e.x, e.y);
-
-                    bullets.forEach((b, bIdx) => {{
-                        if (b.x > e.x && b.x < e.x + 30 && b.y > e.y && b.y < e.y + 30) {{
-                            bullets.splice(bIdx, 1); enemies.splice(eIdx, 1);
-                            score += 10;
-                            if (score >= 500) finishMatch();
-                        }}
-                    }});
-
-                    if (e.x < p.x + 25 && e.x + 25 > p.x && e.y < p.y + 25 && e.y + 25 > p.y) {{
-                        enemies.splice(eIdx, 1);
-                        p.hp -= 20;
-                        if (p.hp <= 0) finishMatch(); // Триггер смерти кота
-                    }}
-                    if (e.x < -30) enemies.splice(eIdx, 1);
-                }});
-
-                if (isPlay) {{
-                    ctx.fillStyle = "white"; ctx.font = "bold 16px Arial";
-                    ctx.textAlign = "left";
-                    ctx.fillText(`Кот: ${{p.name}}  |  ❤️ HP: ${{p.hp}}/${{p.maxHp}}  |  🎯 Очки: ${{score}} / 500`, 15, 25);
-                }}
+                ctx.fillStyle="white"; ctx.font="16px Arial"; ctx.fillText(`Кот: ${{p.name}} | ❤️ HP: ${{p.hp}}/${{p.maxHp}} | 🎯 Очки: ${{score}}/500`,15,25);
             }}
-        </script>
-    </body>
-    </html>
+        </script></body></html>
     """
-    components.html(game_html, height=410)
+    components.html(game_html, height=400)
 
-# ================= ВКЛАДКА 2: ТАБЛИЦА РАНГОВ =================
-with tab_profile:
-    st.header("🎖️ Твоя карьерная лестница в CatStrike 2D")
-    st.write("Собирай еду в боях и повышай статус своей кошачьей банды:")
-    
-    for r_name, r_cost in RANKS_DICT.items():
-Используйте код с осторожностью.is_current = "👈 ТЕКУЩИЙ РАНГ" if st.session_state.current_rank == r_name else ""st.markdown(f"""{r_name.upper()} {is_current}Стоимость активации: {r_cost} еды""", unsafe_allow_html=True)Кнопка читерского теста для начисления едыif st.sidebar.button("🧪 Тест: Выдать +5000 еды"):st.sidebar.write("")st.session_state.food += 5000save_game(st.session_state.food, st.session_state.current_rank)st.rerun()
-4. Сохраните файл на GitHub через зелёную кнопку **`Commit changes...`**.
+with tab_p:
+    st.header("👤 Сетка твоих званий")
+    for r_n, r_c in RANKS.items():
+        is_curr = " (Текущий)" if st.session_state.current_rank == r_n else ""
+        st.write(f"• **{r_n.upper()}** — требуется {r_c} еды {is_curr}")
 
----
+if st.sidebar.button("🧪 Читы: +5000 еды"):
+    st.session_state.food += 5000
+    json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+    st.rerun()
 
-Подождите 10 секунд, обновите ваш сайт `CatStrike 2D`. 
-
-Зайдите на арену, выберите любого кота и намеренно врежьтесь во врагов-крыс `🐀`, чтобы обнулить здоровье (HP). **Зависание ушло?** На экране загорается надпись «МАТЧ ЗАВЕРШЕН», после чего сайт плавно возвращает вас в лобби с +100 еды на балансе? Напишите, как прошёл тест!
+  
