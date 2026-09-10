@@ -1,10 +1,9 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import os, json, random
+import os, json
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
-# --- СИСТЕМА СОХРАНЕНИЯ ПРОГРЕССА ---
 SAVE_FILE = "save_data.json"
 def load_game():
     if os.path.exists(SAVE_FILE):
@@ -22,7 +21,6 @@ rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
 speed_bonus = current_idx * 0.4
 
-# Боковая панель
 st.sidebar.markdown(f"## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**")
 
 if current_idx < len(rank_list) - 1:
@@ -38,11 +36,10 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    # ИСПРАВЛЕНО: Безопасное и полное удаление параметра из адресной строки браузера
     if "end_match" in st.query_params:
         st.session_state.food += 100
         json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-        del st.query_params["end_match"] # Удаляем хвостик из ссылки навсегда
+        del st.query_params["end_match"]
         st.success("Матч окончен! Начислено 🍖 100 еды!")
         st.rerun()
 
@@ -65,7 +62,7 @@ with tab_g:
         <canvas id="arena" width="650" height="350"></canvas>
         <script>
             const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
-            let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:''}}, keys={{}}, bullets=[], enemies=[], score=0, isPlay=false, isEnd=false;
+            let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:''}}, keys={{}}, bullets=[], enemies=[], score=0, isPlay=false, reqId=null;
             
             function start(n,e,s,h) {{ 
                 document.getElementById("menu").style.display="none"; 
@@ -75,27 +72,30 @@ with tab_g:
                 loop(); 
             }}
             
-            window.addEventListener("keydown",(e)=>{{keys[e.code]=true; if(e.code==="Space")shoot();}});
-            window.addEventListener("keyup",(e)=>{{keys[e.code]=false;}});
+            window.addEventListener("keydown",(e)=>{{ if(isPlay) keys[e.code]=true; if(e.code==="Space")shoot();}});
+            window.addEventListener("keyup",(e)=>{{ keys[e.code]=false; }});
             canvas.addEventListener("mousedown",shoot);
             
             function shoot() {{ if(isPlay) bullets.push({{x:p.x+15, y:p.y+8, speed:10}}); }}
             
             function finish() {{ 
-                if(isEnd) return; 
-                isEnd=true; 
-                isPlay=false; 
+                if(!isPlay) return;
+                isPlay = false; 
+                if(reqId) cancelAnimationFrame(reqId); // НАМЕРТВО ТОРМОЗИМ ДВИЖОК ИГРЫ
+                keys = {{}}; // Очищаем нажатия клавиш
+                
                 ctx.fillStyle="rgba(0,0,0,0.8)"; 
                 ctx.fillRect(0,0,canvas.width,canvas.height); 
                 ctx.fillStyle="white"; 
                 ctx.font="30px Arial"; 
                 ctx.fillText("МАТЧ ЗАВЕРШЕН",200,180); 
+                
                 setTimeout(()=>{{window.parent.location.search="?end_match=1";}},500); 
             }}
             
             function loop() {{ 
                 if(!isPlay) return; 
-                requestAnimationFrame(loop); 
+                reqId = requestAnimationFrame(loop); 
                 ctx.clearRect(0,0,canvas.width,canvas.height);
                 
                 if(keys["KeyW"]||keys["ArrowUp"]) p.y-=p.speed; 
@@ -107,7 +107,7 @@ with tab_g:
                 p.y=Math.max(10,Math.min(canvas.height-40,p.y));
                 
                 ctx.font=p.size+"px Arial"; 
-                ctx.fillText(p.emoji,p.x,p.y);
+                ctx.fillText(p.emoji, p.x, p.y);
                 
                 bullets.forEach((b,idx)=>{{ b.x+=b.speed; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,Math.PI*2); ctx.fillStyle="#22c55e"; ctx.fill(); if(b.x>canvas.width)bullets.splice(idx,1); }});
                 
@@ -130,7 +130,7 @@ with tab_g:
                     if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ 
                         enemies.splice(eIdx,1); 
                         p.hp-=20; 
-                        if(p.hp <= 0) finish(); 
+                        if(p.hp <= 0) finish(); // Смерть вызывает финиш ОДИН раз
                     }}
                     if(e.x<-30) enemies.splice(eIdx,1);
                 }});
@@ -150,6 +150,10 @@ with tab_p:
         st.write(f"• **{r_n.upper()}** — требуется {r_c} еды {is_curr}")
 
 if st.sidebar.button("🧪 Читы: +5000 еды"):
+    st.session_state.food += 5000
+    json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+    st.rerun()
+
     st.session_state.food += 5000
     json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
     st.rerun()
