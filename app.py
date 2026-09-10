@@ -52,7 +52,6 @@ if current_idx < len(rank_list) - 1:
     st.sidebar.write(f"Следующий ранг: **{next_rank.upper()}**")
     st.sidebar.write(f"Стоимость: `{cost_next}` еды")
     if st.sidebar.button("🎖️ ПОВЫСИТЬ РАНГ"):
-        # ИСПРАВЛЕНО: Заменили сломанную переменную на правильную cost_next
         if st.session_state.food < cost_next:
             st.sidebar.error("Не хватает еды для апгрейда ранга!")
         else:
@@ -68,7 +67,8 @@ tab_game, tab_profile = st.tabs(["🎮 Арена Боя", "👤 Профиль 
 
 # ================= ВКЛАДКА 1: МАТЧ И АРЕНА =================
 with tab_game:
-    st.write("Цель матча: набрать **1000 очков**. За каждый выход или проигрыш выдается **100 еды**!")
+    # ИСПРАВЛЕНО: Текст изменен под планку в 500 очков
+    st.write("Цель матча: набрать **500 очков**. За каждый выход или проигрыш выдается **100 еды**!")
     
     # Ловим результаты из JavaScript-игры
     query_params = st.query_params
@@ -79,7 +79,7 @@ with tab_game:
         st.balloons()
         st.rerun()
 
-    # Встраиваем игровой движок с учетом бонуса сложности от ранга
+    # Встраиваем игровой движок с новой планкой очков
     game_html = f"""
     <!DOCTYPE html>
     <html>
@@ -164,7 +164,8 @@ with tab_game:
                         if (b.x > e.x && b.x < e.x + 30 && b.y > e.y && b.y < e.y + 30) {{
                             bullets.splice(bIdx, 1); enemies.splice(eIdx, 1);
                             score += 10;
-                            if (score >= 1000) finishMatch();
+                            // ИСПРАВЛЕНО: Победа теперь засчитывается при 500 очках!
+                            if (score >= 500) finishMatch();
                         }}
                     }});
 
@@ -177,7 +178,7 @@ with tab_game:
                 }});
 
                 ctx.fillStyle = "white"; ctx.font = "bold 16px Arial";
-                ctx.fillText(`Кот: ${{p.name}}  |  ❤️ HP: ${{p.hp}}/${{p.maxHp}}  |  🎯 Очки: ${{score}} / 1000`, 15, 25);
+                ctx.fillText(`Кот: ${{p.name}}  |  ❤️ HP: ${{p.hp}}/${{p.maxHp}}  |  🎯 Очки: ${{score}} / 500`, 15, 25);
             }}
         </script>
     </body>
@@ -203,4 +204,5 @@ with tab_profile:
 if st.sidebar.button("🧪 Тест: Выдать +5000 еды"):
     st.session_state.food += 5000
     st.rerun()
+
 
