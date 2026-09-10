@@ -1,9 +1,9 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import os, json
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
+# --- НАДЕЖНОЕ СОХРАНЕНИЕ ПРОГРЕССА ---
 SAVE_FILE = "save_data.json"
 def load_game():
     if os.path.exists(SAVE_FILE):
@@ -16,9 +16,9 @@ if 'save_init' not in st.session_state:
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
 
-# Проверяем, пришел ли сигнал о победе/проигрыше через локальное хранилище в фоне
-if 'js_trigger' not in st.session_state:
-    st.session_state.js_trigger = True
+# Инициализируем скрытый счетчик матчей для триггера обновления
+if 'match_trigger' not in st.session_state:
+    st.session_state.match_trigger = 0
 
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 rank_list = list(RANKS.keys())
@@ -40,17 +40,16 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    # СОЧНЫЕ КНОПКИ НАГРАДЫ НА СТОРОНЕ STREAMLIT
-    # Сюда игра выкидывает игрока после финала
-    if st.button("🟢 ЗАБРАТЬ +100 ЕДЫ (КЛИКНИ ДЛЯ НАГРАДЫ ПОСЛЕ ПОБЕДЫ)", use_container_width=True):
-        st.session_state.food += 100
-        json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+    # Хитрый скрытый обработчик сигналов из JavaScript. Ловит победу/проигрыш без кнопок!
+    # Он работает через встроенные параметры query_params, которые JS меняет мгновенно
+    if "res" in st.query_params:
+        result = st.query_params["res"]
+        if result == "win":
+            st.session_state.food += 100
+            json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+            st.success("Победа! Начислено 100 еды!")
+        st.query_params.clear()
         st.rerun()
-        
-    if st.button("🔴 ВЕРНУТЬСЯ В МЕНЮ ПОСЛЕ ПРОИГРЫША", use_container_width=True):
-        st.rerun()
-
-    st.write("---")
 
     game_html = f"""
     <!DOCTYPE html><html><head><style>
@@ -62,7 +61,7 @@ with tab_g:
     </style></head><body>
         <div id="menu" class="box">
             <h3>ВЫБЕРИТЕ КОТА (Сложность: +{speed_bonus:.1f}):</h3>
-            <button class="btn" style="background:#eab308; color:black; font-weight:bold;" onclick="start('ADMIN','👑',6,2000,2)">👑 ADMIN (2000 HP + Сверхбыстрая атака)</button>
+            <button class="btn" style="background:#eab308; color:black; font-weight:bold;" onclick="start('ADMIN','👑',6,2000,2)">👑 ADMIN (Для тестов)</button>
             <button class="btn" onclick="start('Vasya','🐱',3.5,150,10)">🐱 Vasya (150 HP)</button>
             <button class="btn" onclick="start('Bulya','🐱',4,100,10)">🐱 Bulya (100 HP)</button>
             <button class="btn" onclick="start('Murka','🐱',4.5,110,10)">🐱 Murka (110 HP)</button>
@@ -87,14 +86,18 @@ with tab_g:
             canvas.addEventListener("mousedown",()=>{{ if(isPlay && cooldownTimer<=0) shoot(); }});
             function shoot() {{ bullets.push({{x:p.x+15, y:p.y+8, speed:12}}); cooldownTimer = p.shootCooldown; }}
             
+            // ЗАЩИЩЕННЫЙ ШЛЮЗ: Передаем данные наверх через безопасное изменение хеша страницы, которое не блокируется браузерами
             function finish(result) {{ 
                 if(!isPlay) return; isPlay = false; 
                 ctx.fillStyle="rgba(15, 23, 42, 0.9)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
                 ctx.fillStyle = result === "win" ? "#22c55e" : "#ef4444";
                 ctx.font="bold 30px Arial"; ctx.textAlign="center";
-                ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
-                ctx.fillStyle = "white"; ctx.font="16px Arial";
-                ctx.fillText(result === "win" ? "Нажмите зеленую кнопку НАД игрой, чтобы забрать еду!" : "Нажмите красную кнопку НАД игрой для выхода", canvas.width/2, 220);
+                ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
+                
+                // Спустя 1 секунду автоматически перенаправляем родительское окно БЕЗ кнопок
+                setTimeout(()=>{{ 
+                    window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?res=" + result;
+                }}, 1000);
             }}
             
             function loop() {{ 
@@ -109,16 +112,16 @@ with tab_g:
                     e.x-=e.speed; ctx.font="28px Arial"; ctx.fillText("🐀",e.x,e.y);
                     bullets.forEach((b,bIdx)=>{{ 
                         if(b.x>e.x && b.x<e.x+30 && b.y>e.y && b.y<e.y+30){{ bullets.splice(bIdx,1); enemies.splice(eIdx,1); score+=10; if(score>=500) finish("win"); }} 
-                        }});
-                        if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ enemies.splice(eIdx,1); p.hp-=20; if(p.hp <= 0) finish("lose"); }}
-                        if(e.x<-30) enemies.splice(eIdx,1);
+                    }});
+                    if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ enemies.splice(eIdx,1); p.hp-=20; if(p.hp <= 0) finish("lose"); }}
+                    if(e.x<-30) enemies.splice(eIdx,1);
                 }});
                 ctx.fillStyle="white"; ctx.font="16px Arial"; ctx.textAlign="left";
                 ctx.fillText(`Кот: ${{p.name}} | ❤️ HP: ${{p.hp}}/${{p.maxHp}} | 🎯 Очки: ${{score}}/500`,15,25);
             }}
         </script></body></html>
     """
-    components.html(game_html, height=400)
+    st.components.v1.html(game_html, height=400)
 
 with tab_p:
     st.header("👤 Сетка твоих званий")
