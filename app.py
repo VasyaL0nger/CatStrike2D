@@ -52,7 +52,8 @@ if current_idx < len(rank_list) - 1:
     st.sidebar.write(f"Следующий ранг: **{next_rank.upper()}**")
     st.sidebar.write(f"Стоимость: `{cost_next}` еды")
     if st.sidebar.button("🎖️ ПОВЫСИТЬ РАНГ"):
-        if st.session_state.food < cost_cost_next:
+        # ИСПРАВЛЕНО: Заменили сломанную переменную на правильную cost_next
+        if st.session_state.food < cost_next:
             st.sidebar.error("Не хватает еды для апгрейда ранга!")
         else:
             st.session_state.food -= cost_next
@@ -65,7 +66,7 @@ else:
 # Главные вкладки хаба
 tab_game, tab_profile = st.tabs(["🎮 Арена Боя", "👤 Профиль и Ранги"])
 
-# ================= В КЛАДКА 1: МАТЧ И АРЕНА =================
+# ================= ВКЛАДКА 1: МАТЧ И АРЕНА =================
 with tab_game:
     st.write("Цель матча: набрать **1000 очков**. За каждый выход или проигрыш выдается **100 еды**!")
     
@@ -109,7 +110,6 @@ with tab_game:
             let p = {{ x: 100, y: 180, size: 30, emoji: '🐱', speed: 4, name: '', hp: 100, maxHp: 100 }};
             let keys = {{}}; let bullets = []; let enemies = []; let score = 0; let isPlay = false;
             
-            // Базовый бонус скорости врагов от ранга на хостинге
             let speedBonus = {difficulty_speed_bonus}; 
 
             function start(name, emoji, speed, hp) {{
@@ -152,9 +152,7 @@ with tab_game:
                     if (b.x > canvas.width) bullets.splice(bIdx, 1);
                 }});
 
-                // Спавн крыс
                 if (Math.random() < 0.025) {{
-                    // Базовая скорость 2 + бонус от ранга аккаунта!
                     enemies.push({{ x: canvas.width, y: Math.random() * (canvas.height - 50) + 10, speed: (Math.random() * 1.5 + 2) + speedBonus, size: 28 }});
                 }}
 
@@ -166,7 +164,6 @@ with tab_game:
                         if (b.x > e.x && b.x < e.x + 30 && b.y > e.y && b.y < e.y + 30) {{
                             bullets.splice(bIdx, 1); enemies.splice(eIdx, 1);
                             score += 10;
-                            // ПОБЕДА НА 1000 ОЧКОВ
                             if (score >= 1000) finishMatch();
                         }}
                     }});
@@ -202,7 +199,7 @@ with tab_profile:
             </div>
         """, unsafe_allow_html=True)
 
-# Кнопка взлома/теста для разработчиков
+# Кнопка читерского теста для начисления еды
 if st.sidebar.button("🧪 Тест: Выдать +5000 еды"):
     st.session_state.food += 5000
     st.rerun()
