@@ -62,7 +62,7 @@ with tab_g:
         <canvas id="arena" width="650" height="350"></canvas>
         <script>
             const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
-            let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:''}}, keys={{}}, bullets=[], enemies=[], score=0, isPlay=false, reqId=null;
+            let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:''}}, keys={{}}, bullets=[], enemies=[], score=0, isPlay=false;
             
             function start(n,e,s,h) {{ 
                 document.getElementById("menu").style.display="none"; 
@@ -73,7 +73,7 @@ with tab_g:
             }}
             
             window.addEventListener("keydown",(e)=>{{ if(isPlay) keys[e.code]=true; if(e.code==="Space")shoot();}});
-            window.addEventListener("keyup",(e)=>{{ keys[e.code]=false; }});
+            window.addEventListener("keyup",(e)=>{{ keys[e.code] = false; }});
             canvas.addEventListener("mousedown",shoot);
             
             function shoot() {{ if(isPlay) bullets.push({{x:p.x+15, y:p.y+8, speed:10}}); }}
@@ -81,8 +81,6 @@ with tab_g:
             function finish() {{ 
                 if(!isPlay) return;
                 isPlay = false; 
-                if(reqId) cancelAnimationFrame(reqId); // НАМЕРТВО ТОРМОЗИМ ДВИЖОК ИГРЫ
-                keys = {{}}; // Очищаем нажатия клавиш
                 
                 ctx.fillStyle="rgba(0,0,0,0.8)"; 
                 ctx.fillRect(0,0,canvas.width,canvas.height); 
@@ -90,12 +88,15 @@ with tab_g:
                 ctx.font="30px Arial"; 
                 ctx.fillText("МАТЧ ЗАВЕРШЕН",200,180); 
                 
-                setTimeout(()=>{{window.parent.location.search="?end_match=1";}},500); 
+                # ИСПРАВЛЕНО: Полное жесткое перенаправление верхнего окна (Streamlit) без зависаний
+                setTimeout(()=>{{
+                    window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?end_match=1";
+                }}, 600); 
             }}
             
             function loop() {{ 
                 if(!isPlay) return; 
-                reqId = requestAnimationFrame(loop); 
+                requestAnimationFrame(loop); 
                 ctx.clearRect(0,0,canvas.width,canvas.height);
                 
                 if(keys["KeyW"]||keys["ArrowUp"]) p.y-=p.speed; 
@@ -130,7 +131,7 @@ with tab_g:
                     if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ 
                         enemies.splice(eIdx,1); 
                         p.hp-=20; 
-                        if(p.hp <= 0) finish(); // Смерть вызывает финиш ОДИН раз
+                        if(p.hp <= 0) finish(); 
                     }}
                     if(e.x<-30) enemies.splice(eIdx,1);
                 }});
