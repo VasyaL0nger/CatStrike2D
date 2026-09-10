@@ -3,7 +3,7 @@ import os, json
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
-# --- НАДЕЖНОЕ СОХРАНЕНИЕ ПРОГРЕССА ---
+# --- СИСТЕМА СОХРАНЕНИЯ ПРОГРЕССА ---
 SAVE_FILE = "save_data.json"
 def load_game():
     if os.path.exists(SAVE_FILE):
@@ -15,10 +15,6 @@ if 'save_init' not in st.session_state:
     saved = load_game()
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
-
-# Инициализируем скрытый счетчик матчей для триггера обновления
-if 'match_trigger' not in st.session_state:
-    st.session_state.match_trigger = 0
 
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 rank_list = list(RANKS.keys())
@@ -40,16 +36,20 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    # Хитрый скрытый обработчик сигналов из JavaScript. Ловит победу/проигрыш без кнопок!
-    # Он работает через встроенные параметры query_params, которые JS меняет мгновенно
-    if "res" in st.query_params:
-        result = st.query_params["res"]
-        if result == "win":
+    # СОЗДАЕМ ТРИГГЕРНЫЕ КНОПКИ НА СТОРОНЕ STREAMLIT (ИГРА ИХ НАЖМЕТ САМА ИЗНУТРИ)
+    col_trigger_win, col_trigger_lose = st.columns(2)
+    
+    # Чтобы они не мешали интерфейсу матча, мы делаем их маленькими снизу экрана
+    with col_trigger_win:
+        if st.button("🏆 ПОДТВЕРДИТЬ ПОБЕДУ", key="win_trigger_btn", use_container_width=True):
             st.session_state.food += 100
             json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
             st.success("Победа! Начислено 100 еды!")
-        st.query_params.clear()
-        st.rerun()
+            st.rerun()
+            
+    with col_trigger_lose:
+        if st.button("❌ ВЫЙТИ ПОСЛЕ ПОРАЖЕНИЯ", key="lose_trigger_btn", use_container_width=True):
+            st.rerun()
 
     game_html = f"""
     <!DOCTYPE html><html><head><style>
@@ -86,7 +86,7 @@ with tab_g:
             canvas.addEventListener("mousedown",()=>{{ if(isPlay && cooldownTimer<=0) shoot(); }});
             function shoot() {{ bullets.push({{x:p.x+15, y:p.y+8, speed:12}}); cooldownTimer = p.shootCooldown; }}
             
-            // ЗАЩИЩЕННЫЙ ШЛЮЗ: Передаем данные наверх через безопасное изменение хеша страницы, которое не блокируется браузерами
+            // НАДЕЖНЫЙ МОСТ: Находим кнопки на самом сайте Streamlit и кликаем их программно из JS!
             function finish(result) {{ 
                 if(!isPlay) return; isPlay = false; 
                 ctx.fillStyle="rgba(15, 23, 42, 0.9)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
@@ -94,9 +94,19 @@ with tab_g:
                 ctx.font="bold 30px Arial"; ctx.textAlign="center";
                 ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
                 
-                // Спустя 1 секунду автоматически перенаправляем родительское окно БЕЗ кнопок
                 setTimeout(()=>{{ 
-                    window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?res=" + result;
+                    // Ищем кнопки Streamlit в родительском документе по их тексту и кликаем
+                    const buttons = window.parent.document.querySelectorAll("button");
+                    for (let btn of buttons) {{
+                        if (result === "win" && btn.innerText.includes("ПОДТВЕРДИТЬ ПОБЕДУ")) {{
+                            btn.click();
+                            break;
+                        }}
+                        if (result === "lose" && btn.innerText.includes("ВЫЙТИ ПОСЛЕ ПОРАЖЕНИЯ")) {{
+                            btn.click();
+                            break;
+                        }}
+                    }}
                 }}, 1000);
             }}
             
