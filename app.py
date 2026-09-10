@@ -153,8 +153,3 @@ if st.sidebar.button("🧪 Читы: +5000 еды"):
     st.session_state.food += 5000
     json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
     st.rerun()
-
-    st.session_state.food += 5000
-    json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-    st.rerun()
-
