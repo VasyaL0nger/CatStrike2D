@@ -1,6 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import os, json
+import os, json, time
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
@@ -36,17 +36,18 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    if "end_match" in st.query_params:
+    # ЖЕЛЕЗНАЯ КНОПКА ДЛЯ ЗАВЕРШЕНИЯ МАТЧА И ЗАЧИСЛЕНИЯ НАГРАДЫ
+    if st.button("🛑 ВЕРНУТЬСЯ В ЛОББИ И ЗАБРАТЬ +100 ЕДЫ", use_container_width=True):
         st.session_state.food += 100
         json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-        del st.query_params["end_match"]
-        st.success("Матч окончен! Начислено 🍖 100 еды!")
+        st.success("Матч успешно зафиксирован! Начислено 🍖 100 еды!")
+        time.sleep(0.5)
         st.rerun()
 
     game_html = f"""
     <!DOCTYPE html><html><head><style>
         body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; }}
-        canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; margin:5px auto; }}
+        canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; display:none; margin:5px auto; }}
         .box {{ max-width:450px; margin:10px auto; background:#0f172a; padding:15px; border-radius:12px; border:2px solid #22c55e; }}
         .btn {{ background:#1e293b; color:white; border:1px solid #475569; padding:10px; margin:4px; border-radius:6px; cursor:pointer; width:95%; }}
         .btn:hover {{ background:#16a34a; }}
@@ -82,15 +83,11 @@ with tab_g:
                 if(!isPlay) return;
                 isPlay = false; 
                 
-                ctx.fillStyle="rgba(0,0,0,0.8)"; 
+                ctx.fillStyle="rgba(0,0,0,0.85)"; 
                 ctx.fillRect(0,0,canvas.width,canvas.height); 
                 ctx.fillStyle="white"; 
                 ctx.font="30px Arial"; 
                 ctx.fillText("МАТЧ ЗАВЕРШЕН",200,180); 
-                
-                setTimeout(()=>{{
-                    window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?end_match=1";
-                }}, 600); 
             }}
             
             function loop() {{ 
