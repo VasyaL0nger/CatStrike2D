@@ -1,179 +1,161 @@
 import streamlit as st
-import random
+import streamlit.components.v1 as components
 
-# Настройка страницы
+# Настройка страницы шутера
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
-# Стили оформления
 st.markdown("""
     <style>
-    .stApp { background-color: #020617; color: white; }
-    .game-box { background-color: #0f172a; border: 2px solid #22c55e; border-radius: 8px; padding: 20px; text-align: center; }
+    .stApp { background-color: #020617; color: white; text-align: center; }
     </style>
 """, unsafe_allow_html=True)
 
-# Официальный ростер персонажей
-STATS = {
-    "Vasya": {"speed": 4, "hp": 150, "desc": "Ленивый, харизматичный, мудрый кошачий король. Тяжелая броня из-за любви к пельменям.", "char": "V"},
-    "Bulya": {"speed": 4, "hp": 100, "desc": "Белая кошка. Безумно любит, когда её гладят. Очень нежная. Умеет лечить себя мурлыканьем.", "char": "B"},
-    "Murka": {"speed": 5, "hp": 110, "desc": "Чёрная кошка. Любит играться и царапать людей. Наносит повышенный урон когтями.", "char": "M"},
-    "Rizyk": {"speed": 8, "hp": 90, "desc": "Рыжий кот. Очень быстрый и смертельно опасный. Легко уворачивается от атак.", "char": "R"},
-    "Tomas": {"speed": 6, "hp": 120, "desc": "Чёрный кот с белыми полосками. Лучший друг Рыжика. Обладает бешеной скоростью.", "char": "T"}
-}
-
-# Инициализация игровых переменных в памяти Streamlit
-if 'game_started' not in st.session_state: st.session_state.game_started = False
-if 'cat_choice' not in st.session_state: st.session_state.cat_choice = "Vasya"
-if 'player_x' not in st.session_state: st.session_state.player_x = 1
-if 'enemy_x' not in st.session_state: st.session_state.enemy_x = 9
-if 'bullet_x' not in st.session_state: st.session_state.bullet_x = -1  # -1 означает, что пули на экране нет
-if 'player_hp' not in st.session_state: st.session_state.player_hp = 100
-if 'score' not in st.session_state: st.session_state.score = 0
-if 'battle_logs' not in st.session_state: st.session_state.battle_logs = ["Отряд готов к бою. Выберите бойца."]
-
 st.title("CatStrike 2D")
-st.write("Интерактивный пошаговый прототип 2D арены шутера.")
+st.write("Свободное перемещение, стрельба в реальном времени и стикеры на арене.")
+st.write("Управление: **WASD / Стрелочки** — движение. **Пробел / Клик мыши** — стрельба. Наберите **500 очков** для победы!")
 
-# ================= ЭКРАН ВЫБОРА ПЕРСОНАЖА =================
-if not st.session_state.game_started:
-    st.header("Выбор персонажа")
-    selected_name = st.selectbox("Доступные бойцы:", list(STATS.keys()))
-    cat_data = STATS[selected_name]
-    
-    st.markdown(f"""
-        <div class="game-box">
-            <h2>{selected_name}</h2>
-            <p style='color: #94a3b8; font-size: 16px;'>{cat_data['desc']}</p>
-            <p>Скорость бега: {cat_data['speed']} | Здоровье (HP): {cat_data['hp']}</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    if st.button("В БОЙ", use_container_width=True):
-        st.session_state.cat_choice = selected_name
-        st.session_state.player_hp = cat_data["hp"]
-        st.session_state.player_x = 1
-        st.session_state.enemy_x = 9
-        st.session_state.bullet_x = -1
-        st.session_state.score = 0
-        st.session_state.battle_logs = [f"Матч начался. {selected_name} высадился на арену."]
-        st.session_state.game_started = True
-        st.rerun()
+# Полный HTML5/JavaScript код игры, который встраивается прямо в Streamlit
+game_html = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; background-color: #020617; color: white; font-family: Arial, sans-serif; text-align: center; overflow: hidden; }
+        canvas { background-color: #090d16; border: 3px solid #22c55e; border-radius: 8px; display: block; margin: 10px auto; }
+        .menu-box { max-width: 500px; margin: 20px auto; background: #0f172a; padding: 20px; border-radius: 12px; border: 2px solid #22c55e; }
+        .btn { background: #1e293b; color: white; border: 1px solid #475569; padding: 12px; margin: 6px; border-radius: 6px; cursor: pointer; text-align: left; width: 95%; font-size: 14px; }
+        .btn:hover { background: #16a34a; border-color: #4ade80; }
+        .win-screen { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.95); padding: 40px; border: 4px solid #eab308; border-radius: 16px; color: #eab308; }
+    </style>
+</head>
+<body>
 
-# ================= ИГРОВОЙ ПРОЦЕСС (МАТЧ НА АРЕНЕ) =================
-else:
-    cat_char = STATS[st.session_state.cat_choice]["char"]
-    max_hp = STATS[st.session_state.cat_choice]["hp"]
-    
-    # Игровая статистика
-    col_info, col_hp, col_score = st.columns(3)
-    with col_info: st.markdown(f"**Персонаж:** {st.session_state.cat_choice}")
-    with col_hp: st.markdown(f"**HP:** `{st.session_state.player_hp} / {max_hp}`")
-    with col_score: st.markdown(f"**Убито врагов:** `{st.session_state.score}`")
-    
-    st.write("---")
-    
-    # Логика пошагового движения пули и врага перед отрисовкой карты
-    # Если пуля летит, двигаем её вправо
-    if st.session_state.bullet_x != -1:
-        st.session_state.bullet_x += 2  # Пуля летит быстро (через клетку)
-        if st.session_state.bullet_x >= st.session_state.enemy_x:
-            # Попадание во врага!
-            st.session_state.score += 10
-            st.session_state.battle_logs.insert(0, "Успешное попадание. Враг ликвидирован. Снаряд уничтожен.")
-            st.session_state.enemy_x = 9  # Спавним нового врага в конце карты
-            st.session_state.bullet_x = -1
-        elif st.session_state.bullet_x > 9:
-            # Пуля улетела за карту
-            st.session_state.bullet_x = -1
-            st.session_state.battle_logs.insert(0, "Промах. Пуля улетела за пределы видимости арены.")
+    <!-- ЭКРАН ВЫБОРА КОТА -->
+    <div id="charMenu" class="menu-box">
+        <h3>ВЫБЕРИТЕ БОЕВОГО КОТА:</h3>
+        <button class="btn" onclick="start('Vasya', '🐱', 3.5, 150)">🐱 <b>Vasya</b> — Ленивый король. Штурмовик. Высокое здоровье.</button>
+        <button class="btn" onclick="start('Bulya', '🐱', 4, 100)">🐱✨ <b>Bulya</b> — Белая и нежная кошка. Любит обниматься.</button>
+        <button class="btn" onclick="start('Murka', '🥷', 4.5, 110)">🥷 <b>Murka</b> — Черная кошка. Любит царапаться и играться.</button>
+        <button class="btn" onclick="start('Rizyk', '🦁', 6, 90)">🦁 <b>Rizyk</b> — Рыжий кот. Очень быстрый и опасный.</button>
+        <button class="btn" onclick="start('Tomas', '🐯', 5, 120)">🐯 <b>Tomas</b> — Полосатый друг Рыжика. Штурмовик.</button>
+    </div>
 
-    # Логика движения врага (он наступает влево на 1 клетку каждый ход)
-    if st.session_state.game_started and random.choice([True, False]): # 50% шанс шага врага за действие игрока
-        st.session_state.enemy_x -= 1
-        
-    # Проверка столкновения врага с котом
-    if st.session_state.enemy_x <= st.session_state.player_x:
-        damage = random.randint(15, 30)
-        st.session_state.player_hp -= damage
-        st.session_state.battle_logs.insert(0, f"Враг прорвал дистанцию и нанес урон: -{damage} HP.")
-        st.session_state.enemy_x = 9  # Отбрасываем нового врага назад
+    <!-- ПОБЕДНЫЙ ЭКРАН -->
+    <div id="winScreen" class="win-screen">
+        <h1 style="font-size: 48px; margin: 0;">🏆 ПОБЕДА! 🏆</h1>
+        <p style="font-size: 20px; color: white; margin: 15px 0;">Вы успешно набрали 500 очков в CatStrike 2D!</p>
+        <button class="btn" onclick="location.reload()" style="text-align: center; background: #eab308; color: black; font-weight: bold;">Играть еще раз</button>
+    </div>
 
-    # РЕНДЕРИНГ 2D АРЕНЫ ИЗ 11 КЛЕТОК
-    map_length = 11
-    grid = ["_"] * map_length
-    
-    # Заполняем позиции на поле
-    if st.session_state.bullet_x != -1 and st.session_state.bullet_x < map_length:
-        grid[st.session_state.bullet_x] = "•"  # Обозначение летящей пули
-    grid[st.session_state.player_x] = f"[{cat_char}]"  # Обозначение вашего кота
-    grid[st.session_state.enemy_x] = "[E]"  # Обозначение врага (Enemy)
-    
-    # Выводим арену на экран
-    map_visual = " ".join(grid)
-    st.markdown(f"<h1 style='text-align: center; font-family: monospace; letter-spacing: 3px;'>{map_visual}</h1>", unsafe_allow_html=True)
-    st.write("---")
-    
-    # КНОПКИ ДЕЙСТВИЙ (УПРАВЛЕНИЕ ТАКТИЧЕСКИМ МАТЧЕМ)
-    col_left, col_shoot, col_right, col_skill = st.columns(4)
-    
-    with col_left:
-        if st.button("Шаг Назад", use_container_width=True):
-            st.session_state.player_x = max(0, st.session_state.player_x - 1)
-            st.session_state.battle_logs.insert(0, "Вы сместились назад по тактической сетке.")
-            st.rerun()
-            
-    with col_right:
-        if st.button("Шаг Вперед", use_container_width=True):
-            st.session_state.player_x = min(st.session_state.enemy_x - 1, st.session_state.player_x + 1)
-            st.session_state.battle_logs.insert(0, "Вы сократили дистанцию с противником.")
-            st.rerun()
-            
-    with col_shoot:
-        # Кнопка выстрела активирует летящую пулю
-        if st.button("ОГОНЬ", use_container_width=True):
-            if st.session_state.bullet_x == -1:
-                st.session_state.bullet_x = st.session_state.player_x + 1
-                st.session_state.battle_logs.insert(0, "Произведен выстрел. Пуля выпущена на арену.")
-            else:
-                st.session_state.battle_logs.insert(0, "Отказ системы: предыдущий снаряд еще в полете.")
-            st.rerun()
-            
-    with col_skill:
-        if st.button("СУПЕРСКИЛЛ", use_container_width=True):
-            if st.session_state.cat_choice == "Vasya":
-                st.session_state.enemy_x = min(9, st.session_state.enemy_x + 2)
-                st.session_state.battle_logs.insert(0, "Vasya применил Гипноз. Враг отброшен назад на 2 клетки.")
-            elif st.session_state.cat_choice == "Bulya":
-                st.session_state.player_hp = min(max_hp, st.session_state.player_hp + 25)
-                st.session_state.battle_logs.insert(0, "Нежная Bulya восстановила себе +25 HP за счет мурлыканья.")
-            elif st.session_state.cat_choice == "Murka":
-                st.session_state.score += 10
-                st.session_state.enemy_x = 9
-                st.session_state.battle_logs.insert(0, "Murka совершила прыжок когтями вперед. Враг уничтожен ближним боем.")
-            elif st.session_state.cat_choice == "Rizyk":
-                st.session_state.player_x = max(0, st.session_state.player_x - 2)
-                st.session_state.battle_logs.insert(0, "Рыжик активировал супер-скорость и разорвал дистанцию на 2 клетки назад.")
-            elif st.session_state.cat_choice == "Tomas":
-                st.session_state.score += 10
-                st.session_state.enemy_x = 9
-                st.session_state.battle_logs.insert(0, "Tomas открыл шквальный полосатый огонь. Враг на позиции ликвидирован.")
-            st.rerun()
+    <canvas id="arena" width="700" height="400" style="display:none;"></canvas>
 
-    # Проверка на Game Over
-    if st.session_state.player_hp <= 0:
-        st.error(f"Боец {st.session_state.cat_choice} погиб на поле боя. Игра окончена.")
-        st.markdown(f"### Итоговый результат в CatStrike 2D: `{st.session_state.score} очков`")
-        if st.button("Вернуться в меню выбора бойцов", use_container_width=True):
-            st.session_state.game_started = False
-            st.rerun()
-            
-    # Журнал логов боя
-    st.write("")
-    st.subheader("Лог боя:")
-    for log in st.session_state.battle_logs[:4]:
-        st.write(log)
+    <script>
+        const canvas = document.getElementById("arena");
+        const ctx = canvas.getContext("2d");
 
-    st.write("---")
-    if st.button("Покинуть матч"):
-        st.session_state.game_started = False
-        st.rerun()
+        let p = { x: 100, y: 200, size: 30, emoji: '🐱', speed: 4, name: '', hp: 100, maxHp: 100 };
+        let keys = {};
+        let bullets = [];
+        let enemies = [];
+        let score = 0;
+        let isPlay = false;
+
+        function start(name, emoji, speed, hp) {
+            document.getElementById("charMenu").style.display = "none";
+            canvas.style.display = "block";
+            p.name = name; p.emoji = emoji; p.speed = speed; p.hp = hp; p.maxHp = hp;
+            isPlay = true;
+            loop();
+        }
+
+        window.addEventListener("keydown", (e) => { keys[e.code] = true; if(e.code === "Space") shoot(); });
+        window.addEventListener("keyup", (e) => { keys[e.code] = false; });
+        canvas.addEventListener("mousedown", shoot);
+
+        function shoot() {
+            if (!isPlay) return;
+            bullets.push({ x: p.x + 15, y: p.y + 8, speed: 10, size: 6 });
+        }
+
+        function loop() {
+            if (!isPlay) return;
+            requestAnimationFrame(loop);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Свободное управление котиком (WASD / Стрелочки)
+            if (keys["KeyW"] || keys["ArrowUp"]) p.y -= p.speed;
+            if (keys["KeyS"] || keys["ArrowDown"]) p.y += p.speed;
+            if (keys["KeyA"] || keys["ArrowLeft"]) p.x -= p.speed;
+            if (keys["KeyD"] || keys["ArrowRight"]) p.x += p.speed;
+
+            // Ограничения границ арены
+            p.x = Math.max(10, Math.min(canvas.width - 40, p.x));
+            p.y = Math.max(10, Math.min(canvas.height - 40, p.y));
+
+            // Рисуем стикер кота на арене
+            ctx.font = p.size + "px Arial";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "top";
+            ctx.fillText(p.emoji, p.x, p.y);
+
+            // 2. Полет и отрисовка лазерных пуль
+            bullets.forEach((b, bIdx) => {
+                b.x += b.speed;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+                ctx.fillStyle = "#22c55e"; // Зеленый лазер
+                ctx.fill();
+                ctx.closePath();
+                if (b.x > canvas.width) bullets.splice(bIdx, 1);
+            });
+
+            // 3. Спавн и набег врагов (стикеры крыс)
+            if (Math.random() < 0.025) {
+                enemies.push({ x: canvas.width, y: Math.random() * (canvas.height - 50) + 10, speed: Math.random() * 1.5 + 2, size: 28 });
+            }
+
+            enemies.forEach((e, eIdx) => {
+                e.x -= e.speed;
+                ctx.font = e.size + "px Arial";
+                ctx.fillText("🐀", e.x, e.y); // Стикер врага на арене
+
+                // Столкновение пули с крысой
+                bullets.forEach((b, bIdx) => {
+                    if (b.x > e.x && b.x < e.x + 30 && b.y > e.y && b.y < e.y + 30) {
+                        bullets.splice(bIdx, 1);
+                        enemies.splice(eIdx, 1);
+                        score += 10;
+                        
+                        // Проверка условия победы на 500 очков!
+                        if (score >= 500) {
+                            isPlay = false;
+                            document.getElementById("winScreen").style.display = "block";
+                        }
+                    }
+                });
+
+                // Укус врага (урон коту)
+                if (e.x < p.x + 25 && e.x + 25 > p.x && e.y < p.y + 25 && e.y + 25 > p.y) {
+                    enemies.splice(eIdx, 1);
+                    p.hp -= 20;
+                    if (p.hp <= 0) {
+                        alert("Ваш кот погиб в бою! Попробуйте снова.");
+                        location.reload();
+                    }
+                }
+
+                if (e.x < -30) enemies.splice(eIdx, 1);
+            });
+
+            // Игровой интерфейс шутера
+            ctx.fillStyle = "white";
+            ctx.font = "bold 16px Arial";
+            ctx.fillText(`Кот: ${p.name}  |  ❤️ HP: ${p.hp}/${p.maxHp}  |  🎯 Очки: ${score} / 500`, 15, 20);
+        }
+    </script>
+</body>
+</html>
+"""
+
+# Встраиваем HTML5 арену внутрь Streamlit с фиксацией размеров окна
+components.html(game_html, height=500)
