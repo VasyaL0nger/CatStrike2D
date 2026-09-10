@@ -1,9 +1,11 @@
 import streamlit as st
 import os, json
 
+# ИСПРАВЛЕНО: Импортируем чистую функцию html, которая никогда не вызовет NameError
+from streamlit.components.v1 import html
+
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 
-# --- СИСТЕМА НАДЁЖНОГО СОХРАНЕНИЯ ПРОГРЕССА ---
 SAVE_FILE = "save_data.json"
 def load_game():
     if os.path.exists(SAVE_FILE):
@@ -11,7 +13,6 @@ def load_game():
         except: pass
     return {"food": 0, "current_rank": "начальный"}
 
-# Инициализация профиля
 if 'save_init' not in st.session_state:
     saved = load_game()
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
@@ -22,8 +23,6 @@ rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
 speed_bonus = current_idx * 0.4
 
-# ПРОВЕРКА НАГРАДЫ: Принимаем шифрованный сигнал от игры БЕЗ кнопок
-# Как только игра завершилась, JS меняет адрес внутренней рамки, и Streamlit ловит событие в фоне
 query_params = st.query_params
 if "secure_token" in query_params and query_params["secure_token"] == "cat_win_777":
     st.session_state.food += 100
@@ -35,7 +34,6 @@ elif "status" in query_params:
     st.query_params.clear()
     st.rerun()
 
-# Панель игрока
 st.sidebar.markdown(f"## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**")
 
 if current_idx < len(rank_list) - 1:
@@ -51,7 +49,6 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    # Игровой хаб чист. Никаких кнопок накрутки больше нет.
     game_html = f"""
     <!DOCTYPE html><html><head><style>
         body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; user-select:none; }}
@@ -100,7 +97,6 @@ with tab_g:
                 ctx.font="bold 30px Arial"; ctx.textAlign="center";
                 ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
                 
-                // Кнопки генерируются СТРОГО внутри закрытого игрового фрейма. Нажать их снаружи нельзя!
                 endBtn.innerText = result === "win" ? "ЗАБРАТЬ НАГРАДУ" : "ВЫЙТИ В МЕНЮ";
                 endBtn.style.background = result === "win" ? "#22c55e" : "#ef4444";
                 endBtn.style.color = result === "win" ? "black" : "white";
@@ -109,7 +105,6 @@ with tab_g:
             
             function exitMatch() {{
                 if(matchResult === "win") {{
-                    // Отправляем секретный токен на сервер, который нельзя подделать кликом
                     window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?secure_token=cat_win_777";
                 }} else {{
                     window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?status=lose";
@@ -139,10 +134,12 @@ with tab_g:
             }}
         </script></body></html>
     """
-    components.html(game_html, height=410)
+    # ИСПРАВЛЕНО: Вызываем чистую функцию html вместо сломанного компонента
+    html(game_html, height=410)
 
 with tab_p:
     st.header("👤 Сетка твоих званий")
     for r_n, r_c in RANKS.items():
         is_curr = " (Текущий)" if st.session_state.current_rank == r_n else ""
         st.write(f"• **{r_n.upper()}** — требуется {r_c} еды {is_curr}")
+
