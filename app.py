@@ -38,10 +38,11 @@ if current_idx < len(rank_list) - 1:
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
+    # ИСПРАВЛЕНО: Безопасное и полное удаление параметра из адресной строки браузера
     if "end_match" in st.query_params:
         st.session_state.food += 100
         json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-        st.query_params.clear()
+        del st.query_params["end_match"] # Удаляем хвостик из ссылки навсегда
         st.success("Матч окончен! Начислено 🍖 100 еды!")
         st.rerun()
 
@@ -89,7 +90,7 @@ with tab_g:
                 ctx.fillStyle="white"; 
                 ctx.font="30px Arial"; 
                 ctx.fillText("МАТЧ ЗАВЕРШЕН",200,180); 
-                setTimeout(()=>{{window.parent.location.search="?end_match=1";}},800); 
+                setTimeout(()=>{{window.parent.location.search="?end_match=1";}},500); 
             }}
             
             function loop() {{ 
@@ -129,7 +130,7 @@ with tab_g:
                     if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ 
                         enemies.splice(eIdx,1); 
                         p.hp-=20; 
-                        if(p.hp<=0) finish(); 
+                        if(p.hp <= 0) finish(); 
                     }}
                     if(e.x<-30) enemies.splice(eIdx,1);
                 }});
