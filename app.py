@@ -212,7 +212,24 @@ else:
             }}
 
             
-            function finish(r){play=false; ctx.fillStyle="rgba(0,0,0,0.8)";ctx.fillRect(0,0,650,340);ctx.fillStyle="white";ctx.font="25px Arial";ctx.fillText("МАТЧ ОКОНЧЕН",240,165);const url=window.parent.location.origin+window.parent.location.pathname;if(r=='win'){jw.href=url+"?secure_token=cat_win_777";jw.style.display="block";}else{jl.href=url+"?status=l";jl.style.display="block";}}
+                        function finish(r) {{
+                play = false; 
+                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillRect(0, 0, 650, 340);
+                ctx.fillStyle = "white";
+                ctx.font = "25px Arial";
+                ctx.fillText("МАТЧ ОКОНЧЕН", 240, 165);
+                
+                const url = window.parent.location.origin + window.parent.location.pathname;
+                if (r == "win") {{
+                    jw.href = url + "?secure_token=cat_win_777";
+                    jw.style.display = "block";
+                }} else {{
+                    jl.href = url + "?status=l";
+                    jl.style.display = "block";
+                }}
+            }}
+
             
             function networkSync() {
                 if(solo) return;
