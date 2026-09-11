@@ -71,43 +71,6 @@ if not st.session_state.user:
     if m == "Регистрация" and st.button("🆕 СОЗДАТЬ АККАУНТ", use_container_width=True):
         if u and p and u not in db:
             db[u] = {"p": p, "f": 100, "r": "начальный", "inv": [
-                {"w": "меч", "s": "ножик", "q": "Поношенное"},
-                {"w": "пистолет", "s": "пистолет коллекции 'вася'", "q": "Поношенное"}
-            ]}
-            json.dump(db, open(F, "w"))
-            st.success("УСПЕХ! ТЕПЕРЬ ВЫБЕРИТЕ 'ВОЙТИ'.")
-        else: st.error("ОШИБКА!")
-    elif m == "Войти" and st.button("🔓 ВОЙТИ В ШТАБ", use_container_width=True):
-        if u in db and db[u]["p"] == p:
-            st.session_state.user = u
-            st.session_state.food, st.session_state.rank = db[u]["f"], db[u]["r"]
-            st.session_state.last_login = time.time()
-            st.rerun()
-        else: st.error("ОШИБКА АВТОРИЗАЦИИ!")
-    st.stop()
-
-st.session_state.last_login = time.time()
-u, db = st.session_state.user, load_db()
-RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
-idx = list(RANKS.keys()).index(st.session_state.rank)
-sb_speed = idx * 0.4
-
-if "secure_token" in st.query_params and st.query_params["secure_token"] == "cat_win_777":
-    db[u]["f"] += 100
-    rand_w = random.choice(list(WEAPONS_POOL.keys()))
-    rand_s = random.choice(WEAPONS_POOL[rand_w])
-    new_drop = {"w": rand_w, "s": rand_s, "q": "После полевых испытаний"}
-    if "inv" not in db[u]: db[u]["inv"] = []
-    db[u]["inv"].append(new_drop)
-    json.dump(db, open(F, "w"))
-    st.session_state.dropped_item = f"🎁 {rand_w.upper()} | {rand_s}"
-    st.query_params.clear()
-    st.html("<script>window.close();</script>")
-    st.stop()
-elif "status" in st.query_params:
-    st.query_params.clear()
-    st.session_state.play = False
-    st.rerun()
 st.sidebar.markdown(f"👤 Профиль: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.rank.upper()}**")
 st.sidebar.write("---")
 st.sidebar.subheader("⚙️ Настройки игры")
@@ -168,6 +131,75 @@ with tab_grader:
         else: st.warning(f"🎯 Шанс на успех: **{final_chance}%** (Рискованно!)")
 
         if st.button("🔥 ЗАПУСТИТЬ КОЛЕСО АПГРЕЙДА CS2", use_container_width=True):
+            if st.session_state.food >= 50:
+                st.session_state.food -= 50
+                db[u]["f"] = st.session_state.food
+                roll = random.uniform(0.0, 100.0)
+                if roll <= final_chance:
+                    new_weapon_type = get_weapon_type(target_skin_name)
+                    db[u]["inv"][my_chosen_idx] = {"w": new_weapon_type, "s": target_skin_name, "q": "Прямо с завода"}
+                    json.dump(db, open(F, "w"))
+                    st.balloons()
+                    st.success(f"🏆 КОНТРАКТ СРАБОТАЛ! Василий скрафтил тебе: **{target_skin_name.upper()} (Прямо с завода)**!")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    burned_item_name = my_item["s"]
+                    db[u]["inv"].pop(my_chosen_idx)
+                    json.dump(db, open(F, "w"))
+                    st.error(f"💀 АПГРЕЙД СОРВАЛСЯ! Твой скин **{burned_item_name}** сгорел в пламени горна...")
+                    time.sleep(1.5)
+                    st.rerun()
+            else:
+                st.error("Не хватает еды для оплаты работы Василия! Нужно минимум 🍖 50 еды.")
+
+# ================= ВКЛАДКА ИГРЫ (УМНЫЙ ВЫБОР СЛОТОВ) =================
+with tab_arena:
+    if st.session_state.dropped_item:
+        st.balloons()
+        st.success(f"🎉 ПОБЕДА! Тебе начислено +100 еды и выпал новый дроп:\n### **{st.session_state.dropped_item}**")
+        if st.button("👍 Положить в рюкзак и продолжить"):
+            st.session_state.dropped_item = None
+            st.rerun()
+
+    if not st.session_state.play:
+        st.title(" Меню CatStrike 2D")
+        ch = st.selectbox("Выбери кота:", ["Vasya", "Bulya", "Murka", "Rizyk", "Tomas", "ADMIN"])
+        r = st.radio("Режим:", ["Соло", "Хост P1", "Клиент P2"], horizontal=True)
+        rm = st.text_input("ID Комнаты:", "cat777")
+        
+        if "chosen_slots" not in st.session_state:
+            st.session_state.chosen_slots = ["стандарт"]
+
+        st.write("---")
+        st.subheader("🎒 Снаряжение отряда (Выбери максимум 2 оружия в бой):")
+        user_inventory = db[u].get("inv", [])
+        
+        current_selection = []
+        if not user_inventory:
+            st.info("У тебя нет оружия, пойдёшь со стандартными лапками!")
+        else:
+            for i_idx, item in enumerate(user_inventory):
+                is_selected = st.checkbox(f"🔘 {item['w'].upper()} | {item['s']}", key=f"equip_{i_idx}")
+                if is_selected:
+                    current_selection.append(item["w"])
+        
+        if current_selection:
+            st.session_state.chosen_slots = current_selection
+        else:
+            st.session_state.chosen_slots = ["стандарт"]
+
+        # ИСПРАВЛЕНО: NameError полностью устранен, проверка идет по правильному массиву
+        if len(st.session_state.chosen_slots) > 2:
+            st.error("🚨 Кошачьи карманы не бездонные! Нельзя взять больше 2 пушек за раз.")
+            combat_ready = False
+        else:
+            combat_ready = True
+
+        if st.button("⚔ НАЧАТЬ МАТЧ НА АРЕНЕ", use_container_width=True, disabled=not combat_ready):
+            st.session_state.play, st.session_state.room, st.session_state.role, st.session_state.hero = True, rm, r, ch
+            st.session_state.slot1 = st.session_state.chosen_slots
+            st.rerun()
             if st.session_state.food >= 50:
                 st.session_state.food -= 50
                 db[u]["f"] = st.session_state.food
