@@ -24,18 +24,30 @@ if st.session_state.user and st.session_state.last_login > 0:
         st.sidebar.warning("⏱️ Сессия устарела. Войдите заново!")
         st.rerun()
 
-# БАЗА ВСЕХ ТВОИХ 33 СКИНОВ ДЛЯ СИСТЕМЫ ДРОПА
-WEAPONS_POOL = {
-    "меч": ["ножик", "меч 'сакура'", "меч коллекции 'ангел'", "меч коллекции 'вася'"],
-    "щит": ["щит коллекции 'вася'", "щит коллекции 'ангел'", "щит имени були"],
-    "броня": ["броня 'пещерные обноски'", "броня коллекции 'ангел'", "броня коллекции 'вася'", "броня принца"],
-    "пистолет": ["пистолет 'дракон'", "пистолет коллекции 'вася'", "пистолет коллекции 'ангел'"],
-    "автомат": ["автомат 'градиент'", "автомат коллекции 'вася'", "автомат коллекции 'ангел'", "автомат 'леденец'"],
-    "ракетница": ["ракетница 'дружба'", "ракетница коллекции 'вася'", "ракетница коллекции 'ангел'", "ракетница 'одесские традиции'"],
-    "дрон": ["дрон 'томаса'", "дрон коллекции 'вася'", "дрон коллекции 'ангел'", "дрон 'БПЛА'"],
-    "кинжал": ["кинжал 'молния'", "кинжал коллекции 'вася'", "кинжал коллекции 'ангел'"],
-    "когти": ["когти рыжика", "когти коллекции 'вася'", "когти коллекции 'ангел'", "когти пантеры"]
+# ЦЕННОСТЬ ПРЕДМЕТОВ ДЛЯ РАСЧЕТА ШАНСА В АПГРЕЙДЕРЕ CS2
+SKINS_PRICE = {
+    "ножик": 10, "меч 'сакура'": 30, "меч коллекции 'ангел'": 60, "меч коллекции 'вася'": 100,
+    "щит коллекции 'вася'": 20, "щит коллекции 'ангел'": 50, "щит имени boli": 80,
+    "броня 'пещерные обноски'": 15, "броня коллекции 'ангел'": 45, "броня коллекции 'вася'": 75, "броня принца": 120,
+    "пистолет 'дракон'": 25, "пистолет коллекции 'вася'": 55, "пистолет коллекции 'ангел'": 90,
+    "автомат 'градиент'": 40, "автомат коллекции 'вася'": 70, "автомат коллекции 'ангел'": 110, "автомат 'леденец'": 150,
+    "ракетница 'дружба'": 50, "ракетница коллекции 'вася'": 85, "ракетница коллекции 'ангел'": 130, "ракетница 'одесские традиции'": 200,
+    "дрон 'томаса'": 35, "дрон коллекции 'вася'": 65, "дрон коллекции 'ангел'": 105, "дрон 'БПЛА'": 160,
+    "кинжал 'молния'": 30, "кинжал коллекции 'вася'": 60, "кинжал коллекции 'ангел'": 95,
+    "когти рыжика": 45, "когти коллекции 'вася'": 75, "когти коллекции 'ангел'": 115, "когти пантеры": 180
 }
+
+# Обратный поиск типа оружия по скину
+def get_weapon_type(skin_name):
+    if "меч" in skin_name or skin_name == "ножик": return "меч"
+    if "щит" in skin_name: return "щит"
+    if "броня" in skin_name: return "броня"
+    if "пистолет" in skin_name: return "пистолет"
+    if "автомат" in skin_name: return "автомат"
+    if "ракетница" in skin_name: return "ракетница"
+    if "дрон" in skin_name: return "дрон"
+    if "кинжал" in skin_name: return "кинжал"
+    return "когти"
 
 # --- АВТОРИЗАЦИЯ ---
 if not st.session_state.user:
@@ -47,7 +59,7 @@ if not st.session_state.user:
     if m == "Регистрация" and st.button("🆕 СОЗДАТЬ АККАУНТ", use_container_width=True):
         if u and p and u not in db:
             db[u] = {"p": p, "f": 100, "r": "начальный", "inv": [
-                {"w": "меч", "s": "ножик", "q": "Закаленное в боях"},
+                {"w": "меч", "s": "ножик", "q": "Поношенное"},
                 {"w": "пистолет", "s": "пистолет коллекции 'вася'", "q": "Поношенное"}
             ]}
             json.dump(db, open(F, "w"))
@@ -68,20 +80,15 @@ RANKS = {"начальный":0, "котенок":5000, "кот":10000, "пит�
 idx = list(RANKS.keys()).index(st.session_state.rank)
 sb_speed = idx * 0.4
 
-# ШЛЮЗ НАГРАДЫ: НАЧИСЛЯЕТ ЕДУ И ДАЁТ СЛУЧАЙНЫЙ СКИН ЗА ПОБЕДУ
 if "secure_token" in st.query_params and st.query_params["secure_token"] == "cat_win_777":
     db[u]["f"] += 100
-    
-    # Генератор случайного оружия и скина
-    rand_w = random.choice(list(WEAPONS_POOL.keys()))
-    rand_s = random.choice(WEAPONS_POOL[rand_w])
-    new_drop = {"w": rand_w, "s": rand_s, "q": "Закаленное в боях"}
-    
-    # Записываем дроп в рюкзак игрока
+    all_skins = list(SKINS_PRICE.keys())
+    rand_s = random.choice(all_skins)
+    rand_w = get_weapon_type(rand_s)
+    new_drop = {"w": rand_w, "s": rand_s, "q": "После полевых испытаний"}
     if "inv" not in db[u]: db[u]["inv"] = []
     db[u]["inv"].append(new_drop)
     json.dump(db, open(F, "w"))
-    
     st.session_state.dropped_item = f"🎁 {rand_w.upper()} | {rand_s}"
     st.query_params.clear()
     st.html("<script>window.close();</script>")
@@ -108,71 +115,89 @@ if st.sidebar.button("🚪 Выйти"):
     st.session_state.user = None
     st.rerun()
 
-# --- СЕТКА ВКЛАДОК (АРЕНА + ВАСЯГРЕЙДЕР) ---
+# --- СЕТКА ВКЛАДОК (АРЕНА + ВАСЯГРЕЙДЕР CS2) ---
 tab_arena, tab_grader = st.tabs(["🎮 Арена Боя", "🛠️ Верстак Василия"])
 
-# ================= ВКЛАДКА ВАСЯГРЕЙДЕРА =================
+# ================= НАСТОЯЩАЯ СИСТЕМА UPGRADER CS2 =================
 with tab_grader:
-    st.title("🧰 Мастерская VasyaGrader")
-    st.write("Здесь Василий полирует качество твоего оружия из общего инвентаря аккаунта.")
+    st.title("🧰 Апгрейдер Скинов CS2 от Василия")
+    st.write("Выбери пушку из рюкзака и попытайся улучшить её до ЛЮБОГО желаемого скина!")
     
     st.session_state.food = db[u]["f"]
     user_inventory = db[u].get("inv", [])
 
     if not user_inventory:
-        st.info("🎒 Твой инвентарь пуст! Одержите победу на Арене, чтобы выбить первую пушку.")
+        st.warning("🎒 Твой рюкзак пуст! Иди на Арену и выбей пушку за победу.")
     else:
-        item_labels = []
-        for i_idx, item in enumerate(user_inventory):
-            item_labels.append(f"[{i_idx+1}] {item['w'].upper()} | {item['s']} ({item['q']})")
-            
-        st.subheader("🎒 Предметы в твоём рюкзаке:")
-        for label in item_labels:
-            st.markdown(f"• {label}")
-            
-        st.write("---")
-        st.subheader("🔨 Верстак улучшений")
-        chosen_item_index = st.selectbox("Выбери пушку на прокачку:", range(len(user_inventory)), format_func=lambda x: item_labels[x])
-        selected_item = user_inventory[chosen_item_index]
-        
-        QUALITY_LEVELS = ["Закаленное в боях", "Поношенное", "После полевых испытаний", "Немного поношенное", "Прямо с завода"]
-        current_q = selected_item["q"]
-        
-        if current_q == "Прямо с завода":
-            st.success("💎 Твой скин максимального качества! Прокачка завершена.")
-        else:
-            current_q_idx = QUALITY_LEVELS.index(current_q)
-            next_q = QUALITY_LEVELS[current_q_idx + 1]
-            
-            st.info(f"🔨 Кот Василий готов отполировать **{selected_item['w'].upper()} | {selected_item['s']}**")
-            st.write(f"• Будет: `🚀 {next_q}` | Стоимость: **🍖 100 еды** | Шанс: **🎯 50%**")
-            
-            if st.button("🔨 ЗАПУСТИТЬ АПГРЕЙДЕР ВАСИЛИЯ", use_container_width=True):
-                if st.session_state.food >= 100:
-                    st.session_state.food -= 100
-                    db[u]["f"] = st.session_state.food
-                    
-                    if random.choice([True, False]):
-                        db[u]["inv"][chosen_item_index]["q"] = next_q
-                        json.dump(db, open(F, "w"))
-                        st.balloons()
-                        st.success(f"🔥 УСПЕХ! Качество улучшено до: **{next_q}**!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        json.dump(db, open(F, "w"))
-                        st.error("💀 УПС! Апгрейд сорвался, чертёж испорчен... (Еда списана)")
-                        time.sleep(1)
-                        st.rerun()
-                else:
-                    st.error("Не хватает еды! Сначала повоюй на Арене.")
+        # 1. Шаг: Выбор своего скина (из инвентаря)
+        my_item_labels = [f"{item['w'].upper()} | {item['s']} ({item['q']}) — [Ценность: {SKINS_PRICE.get(item['s'], 10)}🎸]" for item in user_inventory]
+        st.subheader("1️⃣ Выбери свой предмет для обмена:")
+        my_chosen_idx = st.selectbox("Твой скин:", range(len(user_inventory)), format_func=lambda x: my_item_labels[x], key="my_skin_sel")
+        my_item = user_inventory[my_chosen_idx]
+        my_price = SKINS_PRICE.get(my_item["s"], 10)
 
-# ================= ВКЛАДКА ИГРЫ С СИСТЕМОЙ ДРОПА =================
+        st.write("---")
+
+        # 2. Шаг: Выбор желаемого скина (Цель апгрейда)
+        all_available_skins = list(SKINS_PRICE.keys())
+        all_skin_labels = [f"{get_weapon_type(sk).upper()} | {sk} — [Ценность: {SKINS_PRICE[sk]}🎸]" for sk in all_available_skins]
+        
+        st.subheader("2️⃣ Выбери скин-цель, который хочешь получить:")
+        target_chosen_idx = st.selectbox("Желаемый скин:", range(len(all_available_skins)), format_func=lambda x: all_skin_labels[x], key="target_skin_sel")
+        target_skin_name = all_available_skins[target_chosen_idx]
+        target_price = SKINS_PRICE[target_skin_name]
+
+        st.write("---")
+
+        # 3. Шаг: Математический расчет шанса контракта
+        # Шанс рассчитывается по формуле CS2: (Цена своего / Цена цели) * 100
+        raw_chance = (my_price / target_price) * 100
+        final_chance = min(95.0, max(1.0, round(raw_chance, 1))) # Шанс не больше 95% и не меньше 1% для азарта
+        
+        st.subheader("🔨 Верстак Апгрейда")
+        st.markdown(f"• Твой вклад: **{my_item['s']}** ({my_price} 🎸)")
+        st.markdown(f"• Цель контракта: **{target_skin_name}** ({target_price} 🎸)")
+        st.markdown(f"• Стоимость попытки: **🍖 50 еды**")
+        
+        # Визуальный индикатор шанса
+        if final_chance > 70: st.success(f"🎯 Шанс на успех: **{final_chance}%** (Очень высокий!)")
+        elif final_chance > 35: st.info(f"🎯 Шанс на успех: **{final_chance}%** (Хороший шанс)")
+        else: st.warning(f"🎯 Шанс на успех: **{final_chance}%** (Рискованно!)")
+
+        if st.button("🔥 ЗАПУСТИТЬ КОЛЕСО АПГРЕЙДА CS2", use_container_width=True):
+            if st.session_state.food >= 50:
+                # Списываем стоимость попытки
+                st.session_state.food -= 50
+                db[u]["f"] = st.session_state.food
+                
+                # Крутим рулетку на основе рассчитанного процента
+                roll = random.uniform(0.0, 100.0)
+                if roll <= final_chance:
+                    # УСПЕХ: Старый скин стирается, новый падает в инвентарь!
+                    new_weapon_type = get_weapon_type(target_skin_name)
+                    db[u]["inv"][my_chosen_idx] = {"w": new_weapon_type, "s": target_skin_name, "q": "Прямо с завода"}
+                    json.dump(db, open(F, "w"))
+                    st.balloons()
+                    st.success(f"🏆 КОНТРАКТ СРАБОТАЛ! Василий скрафтил тебе: **{target_skin_name.upper()} (Прямо с завода)**!")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    # НЕУДАЧА: Предмет сгорает из инвентаря, как в CS2!
+                    burned_item_name = my_item["s"]
+                    db[u]["inv"].pop(my_chosen_idx)
+                    json.dump(db, open(F, "w"))
+                    st.error(f"💀 АПГРЕЙД СОРВАЛСЯ! Твой скин **{burned_item_name}** сгорел в пламени горна... Василий разводит руками.")
+                    time.sleep(1.5)
+                    st.rerun()
+            else:
+                st.error("Не хватает еды для оплаты работы Василия! Нужно минимум 🍖 50 еды.")
+
+# ================= ВКЛАДКА ИГРЫ =================
 with tab_arena:
     if st.session_state.dropped_item:
         st.balloons()
         st.success(f"🎉 ПОБЕДА! Тебе начислено +100 еды и выпал новый дроп:\n### **{st.session_state.dropped_item}**")
-        st.info("Пушка уже добавлена в твой инвентарь! Загляни на соседнюю вкладку 'Верстак Василия', чтобы прокачать её.")
+        st.info("Пушка уже добавлена в твой инвентарь! Загляни на соседнюю вкладку 'Верстак Василия', чтобы проверить её ценность или попробовать апгрейд.")
         if st.button("👍 Положить в рюкзак и продолжить"):
             st.session_state.dropped_item = None
             st.rerun()
@@ -239,3 +264,4 @@ with tab_arena:
             </script></body></html>
         """
         components.html(game, height=360)
+
