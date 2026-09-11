@@ -15,6 +15,7 @@ if "user" not in st.session_state: st.session_state.user = None
 if "play" not in st.session_state: st.session_state.play = False
 if "mobile_controls" not in st.session_state: st.session_state.mobile_controls = False
 if "last_login" not in st.session_state: st.session_state.last_login = 0.0
+if "dropped_item" not in st.session_state: st.session_state.dropped_item = None
 
 # ЗАЩИТА 12 ЧАСОВ: Автовыход
 if st.session_state.user and st.session_state.last_login > 0:
@@ -22,6 +23,19 @@ if st.session_state.user and st.session_state.last_login > 0:
         st.session_state.user = None
         st.sidebar.warning("⏱️ Сессия устарела. Войдите заново!")
         st.rerun()
+
+# БАЗА ВСЕХ ТВОИХ 33 СКИНОВ ДЛЯ СИСТЕМЫ ДРОПА
+WEAPONS_POOL = {
+    "меч": ["ножик", "меч 'сакура'", "меч коллекции 'ангел'", "меч коллекции 'вася'"],
+    "щит": ["щит коллекции 'вася'", "щит коллекции 'ангел'", "щит имени були"],
+    "броня": ["броня 'пещерные обноски'", "броня коллекции 'ангел'", "броня коллекции 'вася'", "броня принца"],
+    "пистолет": ["пистолет 'дракон'", "пистолет коллекции 'вася'", "пистолет коллекции 'ангел'"],
+    "автомат": ["автомат 'градиент'", "автомат коллекции 'вася'", "автомат коллекции 'ангел'", "автомат 'леденец'"],
+    "ракетница": ["ракетница 'дружба'", "ракетница коллекции 'вася'", "ракетница коллекции 'ангел'", "ракетница 'одесские традиции'"],
+    "дрон": ["дрон 'томаса'", "дрон коллекции 'вася'", "дрон коллекции 'ангел'", "дрон 'БПЛА'"],
+    "кинжал": ["кинжал 'молния'", "кинжал коллекции 'вася'", "кинжал коллекции 'ангел'"],
+    "когти": ["когти рыжика", "когти коллекции 'вася'", "когти коллекции 'ангел'", "когти пантеры"]
+}
 
 # --- АВТОРИЗАЦИЯ ---
 if not st.session_state.user:
@@ -54,9 +68,21 @@ RANKS = {"начальный":0, "котенок":5000, "кот":10000, "пит�
 idx = list(RANKS.keys()).index(st.session_state.rank)
 sb_speed = idx * 0.4
 
-if "secure_token" in st.query_params:
+# ШЛЮЗ НАГРАДЫ: НАЧИСЛЯЕТ ЕДУ И ДАЁТ СЛУЧАЙНЫЙ СКИН ЗА ПОБЕДУ
+if "secure_token" in st.query_params and st.query_params["secure_token"] == "cat_win_777":
     db[u]["f"] += 100
+    
+    # Генератор случайного оружия и скина
+    rand_w = random.choice(list(WEAPONS_POOL.keys()))
+    rand_s = random.choice(WEAPONS_POOL[rand_w])
+    new_drop = {"w": rand_w, "s": rand_s, "q": "Закаленное в боях"}
+    
+    # Записываем дроп в рюкзак игрока
+    if "inv" not in db[u]: db[u]["inv"] = []
+    db[u]["inv"].append(new_drop)
     json.dump(db, open(F, "w"))
+    
+    st.session_state.dropped_item = f"🎁 {rand_w.upper()} | {rand_s}"
     st.query_params.clear()
     st.html("<script>window.close();</script>")
     st.stop()
@@ -82,20 +108,19 @@ if st.sidebar.button("🚪 Выйти"):
     st.session_state.user = None
     st.rerun()
 
-# --- СОЗДАНИЕ СЕТКИ ВКЛАДОК ДЛЯ ОБЪЕДИНЕНИЯ СЕРВЕРОВ ---
+# --- СЕТКА ВКЛАДОК (АРЕНА + ВАСЯГРЕЙДЕР) ---
 tab_arena, tab_grader = st.tabs(["🎮 Арена Боя", "🛠️ Верстак Василия"])
 
-# ================= КУСОК ДЛЯ ВКЛАДКИ ВАСЯГРЕЙДЕРА =================
+# ================= ВКЛАДКА ВАСЯГРЕЙДЕРА =================
 with tab_grader:
     st.title("🧰 Мастерская VasyaGrader")
     st.write("Здесь Василий полирует качество твоего оружия из общего инвентаря аккаунта.")
     
-    # Обновляем баланс еды из общей базы
     st.session_state.food = db[u]["f"]
     user_inventory = db[u].get("inv", [])
 
     if not user_inventory:
-        st.info("🎒 Твой инвентарь пуст! Зарегистрируй новый аккаунт или дождись дропа.")
+        st.info("🎒 Твой инвентарь пуст! Одержите победу на Арене, чтобы выбить первую пушку.")
     else:
         item_labels = []
         for i_idx, item in enumerate(user_inventory):
@@ -142,18 +167,26 @@ with tab_grader:
                 else:
                     st.error("Не хватает еды! Сначала повоюй на Арене.")
 
-# ================= НАЧАЛО ВКЛАДКИ ИГРЫ =================
+# ================= ВКЛАДКА ИГРЫ С СИСТЕМОЙ ДРОПА =================
 with tab_arena:
+    if st.session_state.dropped_item:
+        st.balloons()
+        st.success(f"🎉 ПОБЕДА! Тебе начислено +100 еды и выпал новый дроп:\n### **{st.session_state.dropped_item}**")
+        st.info("Пушка уже добавлена в твой инвентарь! Загляни на соседнюю вкладку 'Верстак Василия', чтобы прокачать её.")
+        if st.button("👍 Положить в рюкзак и продолжить"):
+            st.session_state.dropped_item = None
+            st.rerun()
+
     if not st.session_state.play:
-        st.title("🌐 Меню CatStrike 2D")
+        st.title(" Меню CatStrike 2D")
         ch = st.selectbox("Выбери кота:", ["Vasya", "Bulya", "Murka", "Rizyk", "Tomas", "ADMIN"])
         r = st.radio("Режим:", ["Соло", "Хост P1", "Клиент P2"], horizontal=True)
         rm = st.text_input("ID Комнаты:", "cat777")
-        if st.button("🚀 ЗАПУСТИТЬ АРЕНУ", use_container_width=True):
+        if st.button("⚔ НАЧАТЬ МАТЧ НА АРЕНЕ", use_container_width=True):
             st.session_state.play, st.session_state.room, st.session_state.role, st.session_state.hero = True, rm, r, ch
             st.rerun()
     else:
-        if st.button("↩️ В МЕНЮ", use_container_width=True):
+        if st.button(" В МЕНЮ", use_container_width=True):
             st.session_state.play = False
             st.rerun()
         is_solo = "true" if "Соло" in st.session_state.role else "false"
@@ -161,7 +194,8 @@ with tab_arena:
         hp = 2000 if st.session_state.hero == "ADMIN" else 120
         cd = 2 if st.session_state.hero == "ADMIN" else 15
         sk = "👑" if st.session_state.hero == "ADMIN" else "🐱"
-        mOn, r_n = "true" if st.session_state.mobile_controls else "false", str(st.session_state.get('room', 'cat777'))
+        show_mobile = "true" if st.session_state.mobile_controls else "false"
+        r_n = str(st.session_state.get('room', 'cat777'))
 
         game = """
         <!DOCTYPE html><html><head><style>
@@ -174,8 +208,9 @@ with tab_arena:
             <a id="l" style="display:none;color:#ef4444;font-size:20px;text-decoration:none;" href="" target="_parent">❌ ВЫЙТИ</a>
             <script>
                 const canvas=document.getElementById("a"),ctx=canvas.getContext('2d'),jw=document.getElementById("w"),jl=document.getElementById("l");
-                let keys={}, b=[], en=[], s=0, play=true, t=0, solo="""+is_solo+""", myId="""+p_num+""", mOn="""+show_mobile+""", sb="""+str(sb_speed)+""";
-                let p1={x:50, y:150, h:"""+str(hp)+""", m:"""+str(hp)+""", cd:"""+str(cd)+""", e:'"""+sk+"""', name:'"""+str(st.session_state.hero)+"""'};
+                let keys={}, b=[], en=[], s=0, play=true, t=0;
+                let solo = """ + is_solo + """; let myId = """ + p_num + """; let mOn = """ + show_mobile + """; let sb = """ + str(sb_speed) + """;
+                let p1={x:50, y:150, h:""" + str(hp) + """, m:""" + str(hp) + """, cd:""" + str(cd) + """, e:'""" + sk + """', name:'""" + str(st.session_state.hero) + """'};
                 let p2={x:50, y:230, h:120, m:120, e:'🐯', active:!solo}, joystickActive=false, joyCenter={x:100,y:240}, joyStick={x:100,y:240}, joyRadius=50, stickRadius=20, moveX=0, moveY=0, jId=null;
 
                 window.addEventListener("keydown",e=>{ if(play){ if(e.code==='Space'&&!keys['Space']&&t<=0){shoot();} keys[e.code]=true; } });
@@ -184,7 +219,7 @@ with tab_arena:
                 
                 if(mOn) {
                     canvas.addEventListener("touchstart",e=>{ e.preventDefault(); for(let i=0;i<e.changedTouches.length;i++){ let tObj=e.changedTouches[i], r=canvas.getBoundingClientRect(), tx=tObj.clientX-r.left, ty=tObj.clientY-r.top; if(tx<canvas.width/2&&!joystickActive){ joystickActive=true; jId=tObj.identifier; joyCenter.x=tx; joyCenter.y=ty; joyStick.x=tx; joyStick.y=ty; } else if(tx>=canvas.width/2&&t<=0&&play){shoot();} } });
-                    canvas.addEventListener("touchmove",e=>{ e.preventDefault(); if(!joystickActive)return; for(let i=0;i<e.touches.length;i++){ let tObj=e.touches[i]; if(tObj.identifier===jId){ let r=canvas.getBoundingClientRect(), tx=tObj.clientX-r.left, ty=tObj.clientY-r.top, dx=tx-joyCenter.x, dy=ty-joyCenter.y, dist=Math.sqrt(dx*dx+dy*dy); if(dist<joyRadius){ joyStick.x=tx; joyStick.y=ty; } else { joyStick.x=joyCenter.x+(dx/dist)*joyRadius; joyStick.y=joyCenter.y+(dy/dist)*joyRadius; } moveX=(joyStick.x-joyCenter.x)/joyRadius; moveY=(joyStick.y-joyCenter.y)/joyRadius; } } });
+                    canvas.addEventListener("touchmove",e=>{ e.preventDefault(); if(!joystickActive)return; for(let i=0; i<e.touches.length; i++){ let tObj=e.touches[i]; if(tObj.identifier===jId){ let r=canvas.getBoundingClientRect(), tx=tObj.clientX-r.left, ty=tObj.clientY-r.top, dx=tx-joyCenter.x, dy=ty-joyCenter.y, dist=Math.sqrt(dx*dx+dy*dy); if(dist<joyRadius){ joyStick.x=tx; joyStick.y=ty; } else { joyStick.x=joyCenter.x+(dx/dist)*joyRadius; joyStick.y=joyCenter.y+(dy/dist)*joyRadius; } moveX=(joyStick.x-joyCenter.x)/joyRadius; moveY=(joyStick.y-joyCenter.y)/joyRadius; } } });
                     canvas.addEventListener("touchend",e=>{ e.preventDefault(); for(let i=0;i<e.changedTouches.length;i++){ if(e.changedTouches[i].identifier===jId){ joystickActive=false; jId=null; moveX=0; moveY=0; } } });
                     canvas.addEventListener("touchcancel",()=>{ joystickActive=false; jId=null; moveX=0; moveY=0; });
                 }
@@ -196,7 +231,7 @@ with tab_arena:
                     if(solo||myId==1){ if(mOn&&joystickActive){ p1.x+=moveX*4; p1.y+=moveY*4; } else { if(keys["KeyW"]||keys["ArrowUp"])p1.y-=4; if(keys["KeyS"]||keys["ArrowDown"])p1.y+=4; if(keys["KeyA"]||keys["ArrowLeft"])p1.x-=4; if(keys["KeyD"]||keys["ArrowRight"])p1.x+=4; } if(keys["Space"]&&t<=0)shoot(); p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y)); }
                     if(!solo&&myId==2){ if(mOn&&joystickActive){ p2.x+=moveX*4; p2.y+=moveY*4; } else { if(keys["KeyW"]||keys["ArrowUp"])p2.y-=4; if(keys["KeyS"]||keys["ArrowDown"])p2.y+=4; if(keys["KeyA"]||keys["ArrowLeft"])p2.x-=4; if(keys["KeyD"]||keys["ArrowRight"])p2.x+=4; } if(keys["Space"]&&t<=0)shoot(); p2.x=Math.max(0,Math.min(620,p2.x)); p2.y=Math.max(0,Math.min(310,p2.y)); }
                     networkSync(); ctx.font="25px Arial"; if(p1.h>0)ctx.fillText(p1.e,p1.x,p1.y); if(p2.active&&p2.h>0)ctx.fillText(p2.e,p2.x,p2.y); drawJoystick();
-                    b.forEach((x,i)=>{ x.x+=10; ctx.fillStyle=x.id==1?"#22c55e":"#38bdf8"; ctx.fillRect(x.x,x.y,6,6); if(x.x>650)b.splice(i,1); });
+                    b.forEach((x,i)=>{ x.x+=10; if(x.id==1) { ctx.fillStyle="#22c55e"; } else { ctx.fillStyle="#38bdf8"; } ctx.fillRect(x.x,x.y,6,6); if(x.x>650)b.splice(i,1); });
                     if(Math.random()<0.025)en.push({x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+sb});
                     en.forEach((e,i)=>{ e.x-=e.s; ctx.font="20px Arial"; ctx.fillText("🐀",e.x,e.y); b.forEach((x,j)=>{if(x.x>e.x&&x.x<e.x+20&&x.y>e.y-15&&x.y<e.y+15){b.splice(j,1);en.splice(i,1);s+=10;if(s>=500)finish('win');}}); if(e.x<p1.x+20&&e.x+20>p1.x&&e.y>p1.y-20&&e.y<p1.y+20){en.splice(i,1);p1.h-=20;} if(p2.active&&e.x<p2.x+20&&e.x+20>p2.x&&e.y>p2.y-20&&e.y<p2.y+20){en.splice(i,1);p2.h-=20;} if(p2.active){ if(p1.h<=0&&p2.h<=0)finish('lose'); } else { if(p1.h<=0)finish('lose'); } if(e.x<-20)en.splice(i,1); });
                     ctx.fillStyle="white"; ctx.font="14px Arial"; if(solo) { ctx.fillText("Кот: "+p1.name+" | ❤️ HP: "+p1.h+" | 🎯 Очки: "+s+"/500",10,20); } else { ctx.fillText("Сеть | Комната: "+'"""+r_n+"""'+" | Очки: "+s+"/500",10,20); }
