@@ -17,13 +17,22 @@ if 'save_init' not in st.session_state:
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
 
-# Переключатель экранов на чистом Python
 if 'match_playing' not in st.session_state: st.session_state.match_playing = False
 
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
 speed_bonus = current_idx * 0.4
+
+# ПРОВЕРКА НАГРАДЫ НА СЕРВЕРЕ PYTHON (АНТИЧИТ)
+if "win" in st.query_params:
+    st.session_state.food += 100
+    json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+    st.query_params.clear()
+    st.session_state.match_playing = False
+    st.success("🏆 ПОБЕДА! Начислено 100 еды!")
+    st.balloons()
+    st.rerun()
 
 st.sidebar.markdown(f"## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**")
 
@@ -37,41 +46,23 @@ if current_idx < len(rank_list) - 1:
             st.rerun()
         else: st.sidebar.error("Не хватает еды!")
 
-tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
+tab_g, tab_p = st.tabs([" Anet-2D", " Профиль"])
 
 with tab_g:
-    # РЕЖИМ 1: ЛОББИ ВЫБОРА ПЕРСОНАЖЕЙ
     if not st.session_state.match_playing:
-        box_html = f"""
-        <div style="max-width:450px; margin:10px auto; background:#0f172a; padding:15px; border-radius:12px; border:2px solid #22c55e; text-align:center; color:white; font-family:Arial;">
-            <h3>ВЫБЕРИТЕ КОТА ДЛЯ МАТЧА (Сложность: +{speed_bonus:.1f}):</h3>
-            <p>Доступны: ADMIN, Vasya, Bulya, Murka, Rizyk, Tomas</p>
-            <p style="color:#94a3b8; font-size:13px;">Выберите бойца ниже на панели и нажмите "В БОЙ"</p>
-        </div>
-        """
-        st.markdown(box_html, unsafe_allow_html=True)
-        
-        chosen_cat = st.selectbox("Ваш боец:", ["ADMIN", "Vasya", "Bulya", "Murka", "Rizyk", "Tomas"], label_visibility="collapsed")
-        
+        st.subheader("Сбор кошачьего отряда")
+        chosen_cat = st.selectbox("Выбери бойца:", ["ADMIN", "Vasya", "Bulya", "Murka", "Rizyk", "Tomas"])
         if st.button("⚔️ НАЧАТЬ МАТЧ НА АРЕНЕ", use_container_width=True):
             st.session_state.match_playing = True
             st.session_state.chosen_hero = chosen_cat
             st.rerun()
-
-    # РЕЖИМ 2: СВОБОДНЫЙ МАТЧ В РЕАЛЬНОМ ВРЕМЕНИ
     else:
-        # ЖЕЛЕЗНАЯ КНОПКА ВЫХОДА НА СТОРОНЕ PYTHON С АНТИ-ЧИТОМ
-        # Игрок нажимает её сам, когда увидит на экране финал
-        st.warning("⚠️ Когда матч завершится (Победа или Смерть), нажмите на кнопку ниже, чтобы зафиксировать результат в базе!")
-        
-        if st.button("↩️ ЗАВЕРШИТЬ СЕССИЮ И ВЫЙТИ В ЛОББИ", use_container_width=True):
-            # Сервер Python запрашивает у сессии JavaScript финальный счет
+        # УДОБНАЯ И ЧЕСТНАЯ КНОПКА ВЫХОДА ДЛЯ ПРОИГРЫША
+        if st.button("↩️ ПОКИНУТЬ МАТЧ (БЕЗ НАГРАДЫ)", use_container_width=True):
             st.session_state.match_playing = False
             st.rerun()
 
         st.write("---")
-
-        # Настройки персонажей для JS-движка
         hp_val = 2000 if st.session_state.chosen_hero == "ADMIN" else 120
         cd_val = 2 if st.session_state.chosen_hero == "ADMIN" else 10
 
@@ -79,14 +70,15 @@ with tab_g:
         <!DOCTYPE html><html><head><style>
             body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; user-select:none; }}
             canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; margin:5px auto; }}
+            .claim-btn {{ display:none; background:#22c55e; color:black; font-weight:bold; padding:12px; border-radius:6px; border:none; width:95%; max-width:450px; margin:10px auto; cursor:pointer; font-size:16px; }}
         </style></head><body>
             <canvas id="arena" width="650" height="350"></canvas>
+            <button id="jsClaim" class="claim-btn" onclick="claimFood()">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</button>
             <script>
-                const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
+                const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d"), jsClaim = document.getElementById("jsClaim");
                 let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:{hp_val}, maxHp:{hp_val}, name:'{st.session_state.chosen_hero}', shootCooldown:{cd_val}}};
-                let keys={{}}, bullets=[], enemies=[], score=0, isPlay=true, cooldownTimer=0, matchResult="";
+                let keys={{}}, bullets=[], enemies=[], score=0, isPlay=true, cooldownTimer=0;
                 let speedBonus = {speed_bonus}; 
-                
                 if(p.name === 'ADMIN') p.emoji = '👑';
                 
                 window.addEventListener("keydown",(e)=>{{ if(isPlay) keys[e.code]=true; }});
@@ -96,19 +88,22 @@ with tab_g:
                 
                 function finish(result) {{ 
                     if(!isPlay) return; isPlay = false; 
-                    matchResult = result;
                     ctx.fillStyle="rgba(15, 23, 42, 0.9)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
                     ctx.fillStyle = result === "win" ? "#22c55e" : "#ef4444";
                     ctx.font="bold 30px Arial"; ctx.textAlign="center";
                     ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 160); 
-                    ctx.fillStyle = "white"; ctx.font="15px Arial";
-                    ctx.fillText(result === "win" ? "Читерский бонус: +100 еды начислено! Кликни желтую кнопку выше." : "Матч окончен без награды. Кликни желтую кнопку выше.", canvas.width/2, 210);
                     
-                    // ХИТРЫЙ СЕРВЕРНЫЙ АНТИ-ЧИТ
                     if(result === "win") {{
-                        // Игра тайно прописывает кодовое разрешение в память сессии Streamlit
-                        window.parent.postMessage({{type: 'streamlit:set_widget_value', value: '100'}}, '*');
+                        jsClaim.style.display = "block"; // Показываем кнопку награды строго внутри фрейма игры!
+                    }} else {{
+                        ctx.fillStyle = "white"; ctx.font = "16px Arial";
+                        ctx.fillText("Нажмите кнопку 'Покинуть матч' выше над экраном.", canvas.width/2, 210);
                     }}
+                }}
+                
+                function claimFood() {{
+                    // Безопасный метод смены параметров фрейма, который Streamlit ловит мгновенно
+                    window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?win=1";
                 }}
                 
                 function loop() {{ 
@@ -133,29 +128,7 @@ with tab_g:
                 loop();
             </script></body></html>
         """
-        # Безопасно запускаем фрейм игры
-        components.html(game_html, height=360)
-        
-        # Тайный античит-приемник. Ловит кликал ли игрок или реально набил 500 очков
-        st.html("""
-        <script>
-        window.addEventListener('message', function(e) {
-            if(e.data.value === '100') {
-                const inputs = window.parent.document.querySelectorAll('input');
-                if(inputs.length > 0) {
-                    inputs.value = 'claim_ok';
-                    inputs.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }
-        });
-        </script>
-        """)
-        
-        secure_gate = st.text_input("Шлюз античита", value="no_cheat", label_visibility="collapsed")
-        if secure_signal := secure_gate == "claim_ok":
-            st.session_state.food += 100
-            json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-            st.toast("🍬 100 ЕДЫ УСПЕШНО ЗАЧИСЛЕНО В БАЗУ ДАННЫХ!")
+        components.html(game_html, height=410)
 
 with tab_p:
     st.header("👤 Сетка твоих званий")
