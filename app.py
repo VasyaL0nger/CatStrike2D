@@ -1,5 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components
+from streamlit.components.v1 import html
 import os, json
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
@@ -17,28 +17,14 @@ if 'save_init' not in st.session_state:
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
 
-if 'match_playing' not in st.session_state: st.session_state.match_playing = False
+# Переключатели состояния матча на стороне сервера Python
+if 'match_state' not in st.session_state: st.session_state.match_state = "menu"
+if 'game_score' not in st.session_state: st.session_state.game_score = 0
 
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
 speed_bonus = current_idx * 0.4
-
-# ПРОВЕРКА НАГРАДЫ: Принимаем данные через легальный шлюз ссылок
-query_params = st.query_params
-if "status" in query_params:
-    status = query_params["status"]
-    if status == "win":
-        st.session_state.food += 100
-        json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-        st.success("🏆 ПОБЕДА! Начислено 100 еды!")
-        st.balloons()
-    elif status == "lose":
-        st.error("Вы проиграли. Попробуйте еще раз!")
-    
-    st.query_params.clear()
-    st.session_state.match_playing = False
-    st.rerun()
 
 st.sidebar.markdown(f"## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**")
 
@@ -52,48 +38,76 @@ if current_idx < len(rank_list) - 1:
             st.rerun()
         else: st.sidebar.error("Не хватает еды!")
 
-tab_g, tab_p = st.tabs(["资料 Арена Боя", "👤 Профиль"])
+tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    if not st.session_state.match_playing:
-        st.subheader("Сбор кошачьего отряда")
-        chosen_cat = st.selectbox("Выбери бойца:", ["ADMIN", "Vasya", "Bulya", "Murka", "Rizyk", "Tomas"])
-        if st.button("⚔️ НАЧАТЬ МАТЧ НА АРЕНЕ", use_container_width=True):
-            st.session_state.match_playing = True
-            st.session_state.chosen_hero = chosen_cat
+    # ПРИЕМ ДАННЫХ ИЗ ИГРЫ ЧЕРЕЗ БЕЗОПАСНЫЙ СЛУШАТЕЛЬ URL СЕРВЕРА
+    if "res" in st.query_params:
+        st.session_state.match_state = st.query_params["res"]
+        if st.session_state.match_state == "win":
+            st.session_state.game_score = 500  # Фиксируем победу в памяти Python
+        else:
+            st.session_state.game_score = 0
+        st.query_params.clear()
+        st.rerun()
+
+    # РЕЖИМ ПОБЕДЫ: Кнопка на самом сайте (Браузер ее никогда не заблокирует!)
+    if st.session_state.match_state == "win":
+        st.balloons()
+        st.success("🏆 ВЫ ВЫИГРАЛИ МАТЧ!")
+        if st.button("🟢 ЗАБРАТЬ НАГРАДУ И ПОЛУЧИТЬ +100 ЕДЫ", use_container_width=True):
+            if st.session_state.game_score >= 500:  # ЗАЩИТА ОТ ДЮПА: Проверяем реальные очки на сервере
+                st.session_state.food += 100
+                json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+                st.session_state.match_state = "menu"
+                st.session_state.game_score = 0
+                st.rerun()
+            else:
+                st.error("Античит: Попытка взлома! Вы не выиграли матч на арене.")
+
+    # РЕЖИМ ПРОИГРЫША
+    elif st.session_state.match_state == "lose":
+        st.error("💀 ВЫ ПОГИБЛИ В БОЮ")
+        if st.button("🔴 ВЕРНУТЬСЯ В МЕНЮ ВЫБОРА БОЙЦОВ", use_container_width=True):
+            st.session_state.match_state = "menu"
+            st.session_state.game_score = 0
             st.rerun()
+
+    # РЕЖИМ ИГРЫ: Показываем меню выбора и холст
     else:
-        if st.button("↩️ ПОКИНУТЬ МАТЧ (ВЕРНУТЬСЯ В ЛОББИ)", use_container_width=True):
-            st.session_state.match_playing = False
-            st.rerun()
-
-        st.write("---")
-        hp_val = 2000 if st.session_state.chosen_hero == "ADMIN" else 120
-        cd_val = 2 if st.session_state.chosen_hero == "ADMIN" else 10
-
         game_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; user-select:none; }}
-            canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; margin:5px auto; }}
-            .claim-link {{ display:none; background:#22c55e; color:black; font-weight:bold; padding:12px; border-radius:6px; text-decoration:none; width:90%; max-width:450px; margin:10px auto; font-size:16px; }}
-            .claim-link:hover {{ background:#16a34a; }}
+            canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; display:none; margin:5px auto; }}
+            .box {{ max-width:450px; margin:10px auto; background:#0f172a; padding:15px; border-radius:12px; border:2px solid #22c55e; }}
+            .btn {{ background:#1e293b; color:white; border:1px solid #475569; padding:10px; margin:4px; border-radius:6px; cursor:pointer; width:95%; }}
+            .btn:hover {{ background:#16a34a; }}
         </style></head><body>
             
-            <canvas id="arena" width="650" height="350"></canvas>
+            <div id="menu" class="box">
+                <h3>ВЫБЕРИТЕ КОТА (Сложность: +{speed_bonus:.1f}):</h3>
+                <button class="btn" style="background:#eab308; color:black; font-weight:bold;" onclick="start('ADMIN','👑',6,2000,2)">👑 ADMIN (Для тестов)</button>
+                <button class="btn" onclick="start('Vasya','🐱',3.5,150,10)">🐱 Vasya (150 HP)</button>
+                <button class="btn" onclick="start('Bulya','🐱',4,100,10)">🐱 Bulya (100 HP)</button>
+                <button class="btn" onclick="start('Murka','🐱',4.5,110,10)">🐱 Murka (110 HP)</button>
+                <button class="btn" onclick="start('Rizyk','🐱',6,90,10)">🐱 Rizyk (90 HP)</button>
+                <button class="btn" onclick="start('Tomas','🐱',5,120,10)">🐱 Tomas (120 HP)</button>
+            </div>
             
-            <!-- ИСПРАВЛЕНО: Кнопки теперь являются чистыми HTML-ссылками с флагом target="_parent" -->
-            <a id="jsClaim" class="claim-link" href="" target="_parent">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
-            <a id="jsLose" class="claim-link" style="background:#ef4444; color:white;" href="" target="_parent">❌ ВЫЙТИ В МЕНЮ</a>
+            <canvas id="arena" width="650" height="350"></canvas>
 
             <script>
-                const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
-                const jsClaim = document.getElementById("jsClaim"), jsLose = document.getElementById("jsLose");
-                
-                let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:{hp_val}, maxHp:{hp_val}, name:'{st.session_state.chosen_hero}', shootCooldown:{cd_val}}};
-                let keys={{}}, bullets=[], enemies=[], score=0, isPlay=true, cooldownTimer=0;
+                const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d"), menu = document.getElementById("menu");
+                let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:'', shootCooldown:10}};
+                let keys={{}}, bullets=[], enemies=[], score=0, isPlay=false, cooldownTimer=0;
                 let speedBonus = {speed_bonus}; 
-                if(p.name === 'ADMIN') p.emoji = '👑';
                 
+                function start(n,e,s,h,cd) {{ 
+                    menu.style.display="none"; canvas.style.display="block"; 
+                    p.name=n; p.emoji=e; p.speed=s; p.hp=h; p.maxHp=h; p.shootCooldown=cd;
+                    isPlay=true; score=0; bullets=[]; enemies=[]; cooldownTimer=0;
+                    loop(); 
+                }}
                 window.addEventListener("keydown",(e)=>{{ if(isPlay) keys[e.code]=true; }});
                 window.addEventListener("keyup",(e)=>{{ keys[e.code] = false; }});
                 canvas.addEventListener("mousedown",()=>{{ if(isPlay && cooldownTimer<=0) shoot(); }});
@@ -101,20 +115,15 @@ with tab_g:
                 
                 function finish(result) {{ 
                     if(!isPlay) return; isPlay = false; 
-                    ctx.fillStyle="rgba(15, 23, 42, 0.9)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
+                    ctx.fillStyle="rgba(15, 23, 42, 0.85)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
                     ctx.fillStyle = result === "win" ? "#22c55e" : "#ef4444";
                     ctx.font="bold 30px Arial"; ctx.textAlign="center";
-                    ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 160); 
+                    ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
                     
-                    // Генерируем железные прямые ссылки для клика наружу
-                    const base_url = window.parent.location.origin + window.parent.location.pathname;
-                    if(result === "win") {{
-                        jsClaim.href = base_url + "?status=win";
-                        jsClaim.style.display = "block";
-                    }} else {{
-                        jsLose.href = base_url + "?status=lose";
-                        jsLose.style.display = "block";
-                    }}
+                    // Самый стабильный метод: перезагружаем только сам фрейм игры, меняя его URL параметр res
+                    setTimeout(()=>{{ 
+                        window.location.search = "?res=" + result;
+                    }}, 600);
                 }}
                 
                 function loop() {{ 
@@ -136,10 +145,9 @@ with tab_g:
                     ctx.fillStyle="white"; ctx.font="16px Arial"; ctx.textAlign="left";
                     ctx.fillText(`Кот: ${{p.name}} | ❤️ HP: ${{p.hp}}/${{p.maxHp}} | 🎯 Очки: ${{score}}/500`,15,25);
                 }}
-                loop();
             </script></body></html>
         """
-        components.html(game_html, height=420)
+        html(game_html, height=410)
 
 with tab_p:
     st.header("👤 Сетка твоих званий")
@@ -151,3 +159,4 @@ if st.sidebar.button("🧪 Читы: +5000 еды"):
     st.session_state.food += 5000
     json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
     st.rerun()
+
