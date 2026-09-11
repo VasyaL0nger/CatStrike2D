@@ -15,7 +15,7 @@ if "user" not in st.session_state: st.session_state.user = None
 if "play" not in st.session_state: st.session_state.play = False
 if "mobile_controls" not in st.session_state: st.session_state.mobile_controls = False
 
-# --- 1. АВТОРИЗАЦИЯ ПРИ СТАРТЕ ---
+# --- 1. АВТОРИЗАЦИЯ ---
 if not st.session_state.user:
     st.title("CatStrike 2D 🔐")
     m = st.radio("Режим:", ["Войти", "Регистрация"], horizontal=True)
@@ -53,17 +53,17 @@ elif "status" in st.query_params:
     st.session_state.play = False
     st.rerun()
 
-# --- СЛУЖЕБНАЯ БОКОВАЯ ПАНЕЛЬ С НАСТРОЙКАМИ ---
+# --- БОКОВАЯ ПАНЕЛЬ ---
 st.sidebar.markdown(f"👤 Профиль: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.rank.upper()}**")
 st.sidebar.write("---")
 st.sidebar.subheader("⚙️ Настройки игры")
-st.session_state.mobile_controls = st.sidebar.checkbox("📱 Мобильное управление", value=st.session_state.mobile_controls)
+st.session_state.mobile_controls = st.sidebar.checkbox("📱 Сенсорный Джойстик", value=st.session_state.mobile_controls)
 
 if idx < len(RANKS) - 1 and st.sidebar.button(f"🎖️ АПНУТЬ РАНГ ЗА {RANKS[list(RANKS.keys())[idx+1]]}"):
     next_r = list(RANKS.keys())[idx+1]
     if st.session_state.food >= RANKS[next_r]:
         st.session_state.food -= RANKS[next_r]
-        st.session_state.rank = next_r
+        st.session_state.rank = nxt_r
         db[u]["f"], db[u]["r"] = st.session_state.food, next_r
         json.dump(db, open(F, "w"))
         st.rerun()
@@ -85,7 +85,7 @@ if not st.session_state.play:
         st.session_state.role = role
         st.session_state.hero = chosen_hero
         st.rerun()
-        else:
+else:
     if st.button("↩️ ВЕРНУТЬСЯ В МЕНЮ", use_container_width=True):
         st.session_state.play = False
         st.rerun()
@@ -236,7 +236,7 @@ if not st.session_state.play:
                     ctx.fillRect(x.x,x.y,6,6); 
                     if(x.x>650)b.splice(i,1);
                 }});
-                if(Math.random()<0.025)en.push({{x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+{speed_bonus}}});
+                if(Math.random()<0.025)en.push({{x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+speed_bonus}});
                 en.forEach((e,i)=>{{e.x-=e.s; ctx.font="20px Arial"; ctx.fillText("🐀",e.x,e.y);
                     b.forEach((x,j)=>{{if(x.x>e.x&&x.x<e.x+20&&x.y>e.y-15&&x.y<e.y+15){{b.splice(j,1);en.splice(i,1);s+=10;if(s>=500)finish('win');}}}});
                     if(e.x<p1.x+20&&e.x+20>p1.x&&e.y>p1.y-20&&e.y<p1.y+20){{ en.splice(i,1); p1.h-=20; }}
