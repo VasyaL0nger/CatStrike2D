@@ -24,7 +24,7 @@ rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
 speed_bonus = current_idx * 0.4
 
-# ПРОВЕРКА НАГРАДЫ: Принимаем данные из безопасной HTML-формы
+# ПРОВЕРКА НАГРАДЫ: Принимаем данные через легальный шлюз ссылок
 query_params = st.query_params
 if "status" in query_params:
     status = query_params["status"]
@@ -52,7 +52,7 @@ if current_idx < len(rank_list) - 1:
             st.rerun()
         else: st.sidebar.error("Не хватает еды!")
 
-tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
+tab_g, tab_p = st.tabs(["资料 Арена Боя", "👤 Профиль"])
 
 with tab_g:
     if not st.session_state.match_playing:
@@ -75,22 +75,19 @@ with tab_g:
         <!DOCTYPE html><html><head><style>
             body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; user-select:none; }}
             canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; margin:5px auto; }}
-            .claim-btn {{ display:none; background:#22c55e; color:black; font-weight:bold; padding:12px; border-radius:6px; border:none; width:95%; max-width:450px; margin:10px auto; cursor:pointer; font-size:16px; }}
+            .claim-link {{ display:none; background:#22c55e; color:black; font-weight:bold; padding:12px; border-radius:6px; text-decoration:none; width:90%; max-width:450px; margin:10px auto; font-size:16px; }}
+            .claim-link:hover {{ background:#16a34a; }}
         </style></head><body>
             
-            <!-- СКРЫТАЯ ВЗЛОМОСТОЙКАЯ ФОРМА ДЛЯ ОТПРАВКИ РЕЗУЛЬТАТА НА СЕРВЕР -->
-            <form id="secureForm" target="_parent" method="get">
-                <input type="hidden" name="status" id="formStatus" value="">
-            </form>
-
             <canvas id="arena" width="650" height="350"></canvas>
-            <button id="jsClaim" class="claim-btn" onclick="sendResult('win')">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</button>
-            <button id="jsLose" class="claim-btn" style="background:#ef4444; color:white;" onclick="sendResult('lose')">❌ ВЫЙТИ В МЕНЮ</button>
+            
+            <!-- ИСПРАВЛЕНО: Кнопки теперь являются чистыми HTML-ссылками с флагом target="_parent" -->
+            <a id="jsClaim" class="claim-link" href="" target="_parent">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
+            <a id="jsLose" class="claim-link" style="background:#ef4444; color:white;" href="" target="_parent">❌ ВЫЙТИ В МЕНЮ</a>
 
             <script>
                 const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
                 const jsClaim = document.getElementById("jsClaim"), jsLose = document.getElementById("jsLose");
-                const secureForm = document.getElementById("secureForm"), formStatus = document.getElementById("formStatus");
                 
                 let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:{hp_val}, maxHp:{hp_val}, name:'{st.session_state.chosen_hero}', shootCooldown:{cd_val}}};
                 let keys={{}}, bullets=[], enemies=[], score=0, isPlay=true, cooldownTimer=0;
@@ -109,18 +106,15 @@ with tab_g:
                     ctx.font="bold 30px Arial"; ctx.textAlign="center";
                     ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 160); 
                     
+                    // Генерируем железные прямые ссылки для клика наружу
+                    const base_url = window.parent.location.origin + window.parent.location.pathname;
                     if(result === "win") {{
+                        jsClaim.href = base_url + "?status=win";
                         jsClaim.style.display = "block";
                     }} else {{
+                        jsLose.href = base_url + "?status=lose";
                         jsLose.style.display = "block";
                     }}
-                }}
-                
-                // Железный метод отправки формы, который разрешен всеми браузерами мира
-                function sendResult(res) {{
-                    formStatus.value = res;
-                    secureForm.action = window.parent.location.origin + window.parent.location.pathname;
-                    secureForm.submit();
                 }}
                 
                 function loop() {{ 
