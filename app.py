@@ -17,9 +17,8 @@ if 'save_init' not in st.session_state:
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
 
-# Переключатели состояния матча на стороне сервера Python
-if 'match_ended' not in st.session_state: st.session_state.match_ended = False
-if 'match_result' not in st.session_state: st.session_state.match_result = ""
+# Внутренние триггеры финала матча
+if 'game_state' not in st.session_state: st.session_state.game_state = "menu"
 
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 rank_list = list(RANKS.keys())
@@ -38,34 +37,45 @@ if current_idx < len(rank_list) - 1:
             st.rerun()
         else: st.sidebar.error("Не хватает еды!")
 
-# Скрытый обработчик сигналов postMessage из JavaScript-игры
-# Ловит сообщения "win" или "lose" напрямую через мост браузера
-if "res" in st.query_params:
-    st.session_state.match_result = st.query_params["res"]
-    st.session_state.match_ended = True
+# Хитрый JS-код, который работает на самом сайте Streamlit и ловит сигналы от игры
+components_js = """
+<script>
+window.addEventListener('message', function(e) {
+    if (e.data.type === 'game_over') {
+        const url = window.parent.location.origin + window.parent.location.pathname + '?match_res=' + e.data.result;
+        window.parent.location.href = url;
+    }
+});
+</script>
+"""
+html(components_js, height=0)
+
+# Ловим пойманный сигнал из адресной строки сайта
+if "match_res" in st.query_params:
+    st.session_state.game_state = st.query_params["match_res"]
     st.query_params.clear()
-    st.rerun()
 
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    # РЕЖИМ 1: ЕСЛИ МАТЧ ОКОНЧЕН — ПОКАЗЫВАЕМ СИСТЕМНЫЕ КНОПКИ В ЛОББИ
-    if st.session_state.match_ended:
-        if st.session_state.match_result == "win":
-            st.balloons()
-            st.success("🏆 ПОБЕДА НА АРЕНЕ!")
-            if st.button("🟢 ЗАБРАТЬ НАГРАДУ И ПОЛУЧИТЬ +100 ЕДЫ", use_container_width=True):
-                st.session_state.food += 100
-                json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-                st.session_state.match_ended = False
-                st.rerun()
-        else:
-            st.error("💀 ВЫ ПОГИБЛИ В БОЮ")
-            if st.button("🔴 ВЕРНУТЬСЯ В МЕНЮ ВЫБОРА БОЙЦОВ", use_container_width=True):
-                st.session_state.match_ended = False
-                st.rerun()
-
-    # РЕЖИМ 2: ЕСЛИ ИДЕТ ИГРА — ПОКАЗЫВАЕМ ТОЛЬКО АРЕНУ
+    # РЕЖИМ ПОБЕДЫ: Выдаем 100 еды строго по кнопке
+    if st.session_state.game_state == "win":
+        st.balloons()
+        st.success("🏆 ОТЛИЧНЫЙ МАТЧ! ВЫ ПОБЕДИЛИ КРЫС!")
+        if st.button("🟢 ЗАБРАТЬ +100 ЕДЫ И ВЕРНУТЬСЯ В МЕНЮ", use_container_width=True):
+            st.session_state.food += 100
+            json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+            st.session_state.game_state = "menu"
+            st.rerun()
+            
+    # РЕЖИМ ПРОИГРЫША: Пустой выход без дюпа еды
+    elif st.session_state.game_state == "lose":
+        st.error("💀 ВАШ БОЕЦ ПАЛ В БОЮ. ПОПРОБУЙТЕ СНОВА!")
+        if st.button("🔴 ВЕРНУТЬСЯ В МЕНЮ ВЫБОРА КОТОВ", use_container_width=True):
+            st.session_state.game_state = "menu"
+            st.rerun()
+            
+    # РЕЖИМ ИГРЫ: Отрендерить саму арену
     else:
         game_html = f"""
         <!DOCTYPE html><html><head><style>
@@ -75,7 +85,6 @@ with tab_g:
             .btn {{ background:#1e293b; color:white; border:1px solid #475569; padding:10px; margin:4px; border-radius:6px; cursor:pointer; width:95%; }}
             .btn:hover {{ background:#16a34a; }}
         </style></head><body>
-            
             <div id="menu" class="box">
                 <h3>ВЫБЕРИТЕ КОТА (Сложность: +{speed_bonus:.1f}):</h3>
                 <button class="btn" style="background:#eab308; color:black; font-weight:bold;" onclick="start('ADMIN','👑',6,2000,2)">👑 ADMIN (Для тестов)</button>
@@ -85,9 +94,7 @@ with tab_g:
                 <button class="btn" onclick="start('Rizyk','🐱',6,90,10)">🐱 Rizyk (90 HP)</button>
                 <button class="btn" onclick="start('Tomas','🐱',5,120,10)">🐱 Tomas (120 HP)</button>
             </div>
-            
             <canvas id="arena" width="650" height="350"></canvas>
-
             <script>
                 const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d"), menu = document.getElementById("menu");
                 let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:'', shootCooldown:10}};
@@ -105,7 +112,7 @@ with tab_g:
                 canvas.addEventListener("mousedown",()=>{{ if(isPlay && cooldownTimer<=0) shoot(); }});
                 function shoot() {{ bullets.push({{x:p.x+15, y:p.y+8, speed:12}}); cooldownTimer = p.shootCooldown; }}
                 
-                // БЕЗОПАСНЫЙ СИГНАЛ: Отправляем результат через смену параметров фрейма (Streamlit подхватит)
+                // ОТПРАВЛЯЕМ СИГНАЛ НАВЕРХ: postMessage гарантированно долетит до Streamlit без блокировок
                 function finish(result) {{ 
                     if(!isPlay) return; isPlay = false; 
                     ctx.fillStyle="rgba(15, 23, 42, 0.85)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
@@ -114,7 +121,7 @@ with tab_g:
                     ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
                     
                     setTimeout(()=>{{ 
-                        window.location.search = "?res=" + result;
+                        window.parent.postMessage({{type: 'game_over', result: result}}, '*');
                     }}, 600);
                 }}
                 
@@ -139,7 +146,7 @@ with tab_g:
                 }}
             </script></body></html>
         """
-        html(game_html, height=410)
+        html(game_html, height=400)
 
 with tab_p:
     st.header("👤 Сетка твоих званий")
