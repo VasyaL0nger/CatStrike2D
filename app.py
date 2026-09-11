@@ -80,20 +80,7 @@ if st.sidebar.button("🚪 Выйти"):
     st.session_state.user = None
     st.rerun()
 
-# --- ИГРОВОЙ ХАБ ---
-if not st.session_state.play:
-    st.title("🌐 Игровое меню CatStrike 2D")
-    chosen_hero = st.selectbox("Выбери своего боевого кота:", ["Vasya", "Bulya", "Murka", "Rizyk", "Tomas", "ADMIN"])
-    role = st.radio("Режим игры:", ["🏃 Одиночный матч (Соло)", "🔵 Игрок 1 (Хост комнаты)", "🟡 Игрок 2 (Подключиться к другу)"], horizontal=True)
-    room_id = st.text_input("ID Секретной Комнаты (для сети):", "cat777")
-
-    if st.button("🚀 ЗАПУСТИТЬ АРЕНУ", use_container_width=True):
-        st.session_state.play = True
-        st.session_state.room = room_id
-        st.session_state.role = role
-        st.session_state.hero = chosen_hero
-        st.rerun()
-# --- ИГРОВОЙ ХАБ ---
+# --- ИГРОВОЙ ХАБ С СЕТЕВЫМИ НАСТРОЙКАМИ ---
 if not st.session_state.play:
     st.title("🌐 Игровое меню CatStrike 2D")
     chosen_hero = st.selectbox("Выбери своего боевого кота:", ["Vasya", "Bulya", "Murka", "Rizyk", "Tomas", "ADMIN"])
@@ -118,7 +105,6 @@ else:
     skin = "👑" if st.session_state.hero == "ADMIN" else "🐱"
     show_mobile = "true" if st.session_state.mobile_controls else "false"
     room_name = str(st.session_state.get('room', 'cat777'))
-
     game = """
     <!DOCTYPE html><html><head><style>
         body { margin:0; background:#020617; text-align:center; color:white; font-family:Arial; user-select:none; touch-action:none; }
@@ -126,26 +112,16 @@ else:
         .link { display:none; color:#22c55e; font-size:20px; text-decoration:none; }
     </style></head><body>
         <canvas id="a" width="650" height="340"></canvas>
-
         <a id="w" style="display:none;color:#22c55e;font-size:20px;text-decoration:none;" href="" target="_blank" onclick="setTimeout(()=>{window.parent.location.reload();},500)">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
         <a id="l" style="display:none;color:#ef4444;font-size:20px;text-decoration:none;" href="" target="_parent">❌ ВЫЙТИ</a>
-        
         <script>
             const canvas=document.getElementById("a"),ctx=canvas.getContext('2d'),jw=document.getElementById("w"),jl=document.getElementById("l");
             let keys={}, b=[], en=[], s=0, play=true, t=0;
-            
-            let solo = """ + is_solo + """;
-            let myId = """ + p_num + """;
-            let mOn = """ + show_mobile + """;
-            let sb_speed = """ + str(sb_speed) + """;
-            
+            let solo = """ + is_solo + """; let myId = """ + p_num + """; let mOn = """ + show_mobile + """; let sb_speed = """ + str(sb_speed) + """;
             let p1={x:50, y:150, h: """ + str(hp) + """, m: """ + str(hp) + """, cd: """ + str(cd) + """, e: '""" + skin + """', name: '""" + str(st.session_state.hero) + """'};
             let p2={x:50, y:230, h:120, m:120, e:'🐯', active:!solo};
-            
-            let joystickActive = false;
-            let joyCenter = {x: 100, y: 240}, joyStick = {x: 100, y: 240}, joyRadius = 50, stickRadius = 20;
-            let moveX = 0, moveY = 0;
-            let joystickTouchId = null;
+            let joystickActive = false; let joyCenter = {x: 100, y: 240}, joyStick = {x: 100, y: 240}, joyRadius = 50, stickRadius = 20;
+            let moveX = 0, moveY = 0; let joystickTouchId = null;
 
             window.addEventListener("keydown",e=>{ if(play){ if(e.code==="Space"&&!keys["Space"]&&t<=0){shoot();} keys[e.code]=true; } });
             window.addEventListener("keyup",e=>{keys[e.code]=false;});
@@ -157,16 +133,12 @@ else:
                     for(let i=0; i<e.changedTouches.length; i++) {
                         let tObj = e.changedTouches[i], rect = canvas.getBoundingClientRect();
                         let tx = tObj.clientX - rect.left, ty = tObj.clientY - rect.top;
-                        
                         if (tx < canvas.width / 2 && !joystickActive) {
                             joystickActive = true; joystickTouchId = tObj.identifier;
                             joyCenter.x = tx; joyCenter.y = ty; joyStick.x = tx; joyStick.y = ty;
-                        } else if (tx >= canvas.width / 2 && t <= 0 && play) {
-                            shoot();
-                        }
+                        } else if (tx >= canvas.width / 2 && t <= 0 && play) { shoot(); }
                     }
                 });
-
                 canvas.addEventListener("touchmove", (e) => {
                     e.preventDefault(); if (!joystickActive) return;
                     for(let i=0; i<e.touches.length; i++) {
@@ -175,14 +147,12 @@ else:
                             let rect = canvas.getBoundingClientRect();
                             let tx = tObj.clientX - rect.left, ty = tObj.clientY - rect.top;
                             let dx = tx - joyCenter.x, dy = ty - joyCenter.y, dist = Math.sqrt(dx*dx + dy*dy);
-                            
                             if (dist < joyRadius) { joyStick.x = tx; joyStick.y = ty; } 
                             else { joyStick.x = joyCenter.x + (dx / dist) * joyRadius; joyStick.y = joyCenter.y + (dy / dist) * joyRadius; }
                             moveX = (joyStick.x - joyCenter.x) / joyRadius; moveY = (joyStick.y - joyCenter.y) / joyRadius;
                         }
                     }
                 });
-
                 canvas.addEventListener("touchend", (e) => {
                     e.preventDefault();
                     for(let i=0; i<e.changedTouches.length; i++) {
@@ -193,22 +163,20 @@ else:
                 });
                 canvas.addEventListener("touchcancel", (e) => { joystickActive = false; joystickTouchId = null; moveX = 0; moveY = 0; });
             }
+
             function shoot() { 
                 let bx = p1.x + 20; let by = p1.y + 10; let bid = 1;
                 if (!solo && myId == 2) { bx = p2.x + 20; by = p2.y + 10; bid = 2; }
-                b.push({x: bx, y: by, id: bid}); 
-                t = (solo || myId == 1) ? p1.cd : 15; 
+                b.push({x: bx, y: by, id: bid}); t = (solo || myId == 1) ? p1.cd : 15; 
             }
             
             function finish(r){play=false; ctx.fillStyle="rgba(0,0,0,0.8)";ctx.fillRect(0,0,650,340);ctx.fillStyle="white";ctx.font="25px Arial";ctx.fillText("МАТЧ ОКОНЧЕН",240,165);const url=window.parent.location.origin+window.parent.location.pathname;if(r=='win'){jw.href=url+"?secure_token=cat_win_777";jw.style.display="block";}else{jl.href=url+"?status=l";jl.style.display="block";}}
-            
             function networkSync() {
                 if(solo) return;
                 if(myId == 1) { if(Math.random()<0.1) p2.y += (Math.random() > 0.5 ? 15 : -15); } 
                 else { if(Math.random()<0.05) p1.y += (Math.random() > 0.5 ? 15 : -15); }
                 p2.y = Math.max(10, Math.min(300, p2.y)); p1.y = Math.max(10, Math.min(300, p1.y));
             }
-            
             function drawJoystick() {
                 if (!mOn || !joystickActive) return;
                 ctx.beginPath(); ctx.arc(joyCenter.x, joyCenter.y, joyRadius, 0, Math.PI*2);
@@ -220,62 +188,40 @@ else:
 
             function loopScene() { if(!play)return; requestAnimationFrame(loopScene); ctx.clearRect(0,0,650,340);
                 if(t>0) t--;
-                
                 if(solo || myId == 1){
-                    if (mOn && joystickActive) {
-                        p1.x += moveX * 4; p1.y += moveY * 4;
-                    } else {
+                    if (mOn && joystickActive) { p1.x += moveX * 4; p1.y += moveY * 4; } 
+                    else {
                         if(keys["KeyW"]||keys["ArrowUp"]) p1.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p1.y+=4;
                         if(keys["KeyA"]||keys["ArrowLeft"]) p1.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p1.x+=4;
                     }
-                    if(keys["Space"] && t<=0) shoot();
-                    p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y));
+                    if(keys["Space"] && t<=0) shoot(); p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y));
                 }
                 if(!solo && myId == 2){
-                    if (mOn && joystickActive) {
-                        p2.x += moveX * 4; p2.y += moveY * 4;
-                    } else {
+                    if (mOn && joystickActive) { p2.x += moveX * 4; p2.y += moveY * 4; } 
+                    else {
                         if(keys["KeyW"]||keys["ArrowUp"]) p2.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p2.y+=4;
                         if(keys["KeyA"]||keys["ArrowLeft"]) p2.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p2.x+=4;
                     }
-                    if(keys["Space"] && t<=0) shoot();
-                    p2.x=Math.max(0,Math.min(620,p2.x)); p2.y=Math.max(0,Math.min(310,p2.y));
+                    if(keys["Space"] && t<=0) shoot(); p2.x=Math.max(0,Math.min(620,p2.x)); p2.y=Math.max(0,Math.min(310,p2.y));
                 }
-                
                 networkSync(); ctx.font="25px Arial";
                 if(p1.h>0) ctx.fillText(p1.e, p1.x, p1.y);
                 if(p2.active && p2.h>0) ctx.fillText(p2.e, p2.x, p2.y);
-                
                 drawJoystick();
-                
-                b.forEach((x,i)=>{
-                    x.x+=10; 
-                    if(x.id==1) { ctx.fillStyle="#22c55e"; } else { ctx.fillStyle="#38bdf8"; }
-                    ctx.fillRect(x.x,x.y,6,6); 
-                    if(x.x>650)b.splice(i,1);
-                });
-                
+                b.forEach((x,i)=>{ x.x+=10; if(x.id==1) { ctx.fillStyle="#22c55e"; } else { ctx.fillStyle="#38bdf8"; } ctx.fillRect(x.x,x.y,6,6); if(x.x>650)b.splice(i,1); });
                 if(Math.random()<0.025)en.push({x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+sb_speed});
-                
                 en.forEach((e,i)=>{e.x-=e.s; ctx.font="20px Arial"; ctx.fillText("🐀",e.x,e.y);
                     b.forEach((x,j)=>{if(x.x>e.x&&x.x<e.x+20&&x.y>e.y-15&&x.y<e.y+15){b.splice(j,1);en.splice(i,1);s+=10;if(s>=500)finish('win');}});
                     if(e.x<p1.x+20&&e.x+20>p1.x&&e.y>p1.y-20&&e.y<p1.y+20){ en.splice(i,1); p1.h-=20; }
                     if(p2.active && e.x<p2.x+20&&e.x+20>p2.x&&e.y>p2.y-20&&e.y<p2.y+20){ en.splice(i,1); p2.h-=20; }
-                    
-                    if(p2.active) { 
-                        if(p1.h<=0 && p2.h<=0) finish('lose'); 
-                    } else { 
-                        if(p1.h<=0) finish('lose'); 
-                    }
+                    if(p2.active) { if(p1.h<=0 && p2.h<=0) finish('lose'); } else { if(p1.h<=0) finish('lose'); }
                     if(e.x<-20)en.splice(i,1);
                 });
                 ctx.fillStyle="white"; ctx.font="14px Arial";
-                if(solo) {
-                    ctx.fillText("Кот: " + p1.name + " | ❤️ HP: " + p1.h + " | 🎯 Очки: " + s + "/500", 10, 20);
-                } else {
-                    ctx.fillText("Сеть | Комната: " + '""" + room_name + """' + " | Очки: " + s + "/500", 10, 20);
-                }
+                if(solo) { ctx.fillText("Кот: " + p1.name + " | ❤️ HP: " + p1.h + " | 🎯 Очки: " + s + "/500", 10, 20); } 
+                else { ctx.fillText("Сеть | Комната: " + '""" + room_name + """' + " | Очки: " + s + "/500", 10, 20); }
             }requestAnimationFrame(loopScene);
         </script></body></html>
     """
     components.html(game, height=360)
+
