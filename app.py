@@ -23,26 +23,21 @@ rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
 speed_bonus = current_idx * 0.4
 
-# БРОНЕБОЙНЫЙ ШЛЮЗ АНТИЧИТА ДЛЯ ЗАЧИСЛЕНИЯ ЕДЫ ЧЕРЕЗ НОВУЮ ВКЛАДКУ
+# БРОНЕБОЙНЫЙ ШЛЮЗ: Эта вкладка сама начислит еду и мгновенно закроется!
 query_params = st.query_params
 if "secure_token" in query_params and query_params["secure_token"] == "cat_win_777":
     st.session_state.food += 100
     json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
     st.query_params.clear()
     
-    # Красивый экран начисления в новой вкладке
-    st.balloons()
-    st.success("🏆 СИСТЕМА АНТИЧИТА: МАТЧ ПРОВЕРЕН! ВАМ НАЧИСЛЕНО 🍖 100 ЕДЫ!")
-    st.info("Теперь вы можете просто закрыть эту вкладку браузера и вернуться на основную страницу с игрой, там баланс уже обновился!")
-    if st.button("🔄 ОБНОВИТЬ И ВЕРНУТЬСЯ В ЛОББИ"):
-        st.session_state.match_playing = False
-        st.rerun()
-    st.stop() # Останавливаем выполнение кода для этой вкладки
+    # Скрипт на чистом JS, который мгновенно закрывает эту вкладку после загрузки
+    st.html("<script>window.close();</script>")
+    st.success("Награда зачислена!")
+    st.stop() 
 
 elif "status" in query_params and query_params["status"] == "lose":
     st.query_params.clear()
     st.session_state.match_playing = False
-    st.error("Матч окончен. Вы погибли. Награда выдается только за ПОБЕДУ (500 очков)!")
     st.rerun()
 
 st.sidebar.markdown(f"## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**")
@@ -56,8 +51,6 @@ if current_idx < len(rank_list) - 1:
             json.dump({"food": st.session_state.food, "current_rank": next_r}, open(SAVE_FILE, "w"))
             st.rerun()
         else: st.sidebar.error("Не хватает еды!")
-
-st.markdown("""<style>.stApp { background-color: #020617; color: white; }</style>""", unsafe_allow_html=True)
 
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
@@ -87,8 +80,7 @@ with tab_g:
         </style></head><body>
             <canvas id="arena" width="650" height="350"></canvas>
             
-            <!-- ИСПРАВЛЕНО: Ссылки теперь открываются в новой вкладке через target="_blank", что Хром никогда не заблокирует! -->
-            <a id="jsWin" class="claim-link" href="" target="_blank">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
+            <a id="jsWin" class="claim-link" href="" target="_blank" onclick="setTimeout(()=>{{ window.parent.location.reload(); }}, 500)">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
             <a id="jsLose" class="claim-link" style="background:#ef4444; color:white;" href="" target="_parent">❌ ВЫЙТИ В МЕНЮ</a>
 
             <script>
@@ -114,7 +106,6 @@ with tab_g:
                     
                     const base_url = window.parent.location.origin + window.parent.location.pathname;
                     if(result === "win") {{
-                        // Ссылка на победу ведет строго на секретный токен античита
                         jsWin.href = base_url + "?secure_token=cat_win_777";
                         jsWin.style.display = "block";
                     }} else {{
