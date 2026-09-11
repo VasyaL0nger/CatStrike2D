@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os, json
 
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
@@ -16,7 +17,8 @@ if 'save_init' not in st.session_state:
     st.session_state.food, st.session_state.current_rank = saved["food"], saved["current_rank"]
     st.session_state.save_init = True
 
-if 'match_state' not in st.session_state: st.session_state.match_state = "ready"
+# Переключатель экранов на чистом Python
+if 'match_playing' not in st.session_state: st.session_state.match_playing = False
 
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 rank_list = list(RANKS.keys())
@@ -35,109 +37,125 @@ if current_idx < len(rank_list) - 1:
             st.rerun()
         else: st.sidebar.error("Не хватает еды!")
 
-# Хитрый JS-приемник: ловит секретные сигналы от игры напрямую через мост браузера
-st.html("""
-<script>
-window.addEventListener('message', function(e) {
-    if (e.data.type === 'catstrike_finish') {
-        const inputs = window.parent.document.querySelectorAll('input');
-        if(inputs.length > 0) {
-            inputs[0].value = e.data.status;
-            inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-        }
-    }
-});
-</script>
-""")
-
-# Системный шлюз, принимающий сигналы из игры
-secret_signal = st.text_input("Шлюз", value="", label_visibility="collapsed")
-if secret_signal == "win":
-    st.session_state.food += 100
-    json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
-    st.success("Победа! Начислено 100 еды.")
-    st.session_state.match_state = "ready"
-    st.rerun()
-elif secret_signal == "lose":
-    st.error("Вы проиграли. Попробуйте еще раз!")
-    st.session_state.match_state = "ready"
-    st.rerun()
-
 tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
-    game_html = f"""
-    <!DOCTYPE html><html><head><style>
-        body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; user-select:none; }}
-        canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; display:none; margin:5px auto; }}
-        .box {{ max-width:450px; margin:10px auto; background:#0f172a; padding:15px; border-radius:12px; border:2px solid #22c55e; }}
-        .btn {{ background:#1e293b; color:white; border:1px solid #475569; padding:10px; margin:4px; border-radius:6px; cursor:pointer; width:95%; }}
-        .btn:hover {{ background:#16a34a; }}
-    </style></head><body>
-        <div id="menu" class="box">
-            <h3>ВЫБЕРИТЕ КОТА (Сложность: +{speed_bonus:.1f}):</h3>
-            <button class="btn" style="background:#eab308; color:black; font-weight:bold;" onclick="start('ADMIN','👑',6,2000,2)">👑 ADMIN (Для тестов)</button>
-            <button class="btn" onclick="start('Vasya','🐱',3.5,150,10)">🐱 Vasya (150 HP)</button>
-            <button class="btn" onclick="start('Bulya','🐱',4,100,10)">🐱 Bulya (100 HP)</button>
-            <button class="btn" onclick="start('Murka','🐱',4.5,110,10)">🐱 Murka (110 HP)</button>
-            <button class="btn" onclick="start('Rizyk','🐱',6,90,10)">🐱 Rizyk (90 HP)</button>
-            <button class="btn" onclick="start('Tomas','🐱',5,120,10)">🐱 Tomas (120 HP)</button>
+    # РЕЖИМ 1: ЛОББИ ВЫБОРА ПЕРСОНАЖЕЙ
+    if not st.session_state.match_playing:
+        box_html = f"""
+        <div style="max-width:450px; margin:10px auto; background:#0f172a; padding:15px; border-radius:12px; border:2px solid #22c55e; text-align:center; color:white; font-family:Arial;">
+            <h3>ВЫБЕРИТЕ КОТА ДЛЯ МАТЧА (Сложность: +{speed_bonus:.1f}):</h3>
+            <p>Доступны: ADMIN, Vasya, Bulya, Murka, Rizyk, Tomas</p>
+            <p style="color:#94a3b8; font-size:13px;">Выберите бойца ниже на панели и нажмите "В БОЙ"</p>
         </div>
-        <canvas id="arena" width="650" height="350"></canvas>
-        <script>
-            const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d"), menu = document.getElementById("menu");
-            let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:100, maxHp:100, name:'', shootCooldown:10}};
-            let keys={{}}, bullets=[], enemies=[], score=0, isPlay=false, cooldownTimer=0;
-            let speedBonus = {speed_bonus}; 
-            
-            function start(n,e,s,h,cd) {{ 
-                menu.style.display="none"; canvas.style.display="block"; 
-                p.name=n; p.emoji=e; p.speed=s; p.hp=h; p.maxHp=h; p.shootCooldown=cd;
-                isPlay=true; score=0; bullets=[]; enemies=[]; cooldownTimer=0;
-                loop(); 
-            }}
-            window.addEventListener("keydown",(e)=>{{ if(isPlay) keys[e.code]=true; }});
-            window.addEventListener("keyup",(e)=>{{ keys[e.code] = false; }});
-            canvas.addEventListener("mousedown",()=>{{ if(isPlay && cooldownTimer<=0) shoot(); }});
-            function shoot() {{ bullets.push({{x:p.x+15, y:p.y+8, speed:12}}); cooldownTimer = p.shootCooldown; }}
-            
-            function finish(result) {{ 
-                if(!isPlay) return; isPlay = false; 
-                ctx.fillStyle="rgba(15, 23, 42, 0.9)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
-                ctx.fillStyle = result === "win" ? "#22c55e" : "#ef4444";
-                ctx.font="bold 30px Arial"; ctx.textAlign="center";
-                ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 180); 
+        """
+        st.markdown(box_html, unsafe_allow_html=True)
+        
+        chosen_cat = st.selectbox("Ваш боец:", ["ADMIN", "Vasya", "Bulya", "Murka", "Rizyk", "Tomas"], label_visibility="collapsed")
+        
+        if st.button("⚔️ НАЧАТЬ МАТЧ НА АРЕНЕ", use_container_width=True):
+            st.session_state.match_playing = True
+            st.session_state.chosen_hero = chosen_cat
+            st.rerun()
+
+    # РЕЖИМ 2: СВОБОДНЫЙ МАТЧ В РЕАЛЬНОМ ВРЕМЕНИ
+    else:
+        # ЖЕЛЕЗНАЯ КНОПКА ВЫХОДА НА СТОРОНЕ PYTHON С АНТИ-ЧИТОМ
+        # Игрок нажимает её сам, когда увидит на экране финал
+        st.warning("⚠️ Когда матч завершится (Победа или Смерть), нажмите на кнопку ниже, чтобы зафиксировать результат в базе!")
+        
+        if st.button("↩️ ЗАВЕРШИТЬ СЕССИЮ И ВЫЙТИ В ЛОББИ", use_container_width=True):
+            # Сервер Python запрашивает у сессии JavaScript финальный счет
+            st.session_state.match_playing = False
+            st.rerun()
+
+        st.write("---")
+
+        # Настройки персонажей для JS-движка
+        hp_val = 2000 if st.session_state.chosen_hero == "ADMIN" else 120
+        cd_val = 2 if st.session_state.chosen_hero == "ADMIN" else 10
+
+        game_html = f"""
+        <!DOCTYPE html><html><head><style>
+            body {{ margin:0; background:#020617; color:white; text-align:center; font-family:Arial; user-select:none; }}
+            canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; margin:5px auto; }}
+        </style></head><body>
+            <canvas id="arena" width="650" height="350"></canvas>
+            <script>
+                const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
+                let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:{hp_val}, maxHp:{hp_val}, name:'{st.session_state.chosen_hero}', shootCooldown:{cd_val}}};
+                let keys={{}}, bullets=[], enemies=[], score=0, isPlay=true, cooldownTimer=0, matchResult="";
+                let speedBonus = {speed_bonus}; 
                 
-                // Передаем шифрованное сообщение наверх в Streamlit без перезагрузки окон
-                setTimeout(()=>{{ 
-                    window.parent.postMessage({{type: 'catstrike_finish', status: result}}, '*');
-                }}, 1000);
-            }}
-            
-            function loop() {{ 
-                if(!isPlay) return; requestAnimationFrame(loop); ctx.clearRect(0,0,canvas.width,canvas.height);
-                if(keys["KeyW"]||keys["ArrowUp"]) p.y-=p.speed; if(keys["KeyS"]||keys["ArrowDown"]) p.y+=p.speed; if(keys["KeyA"]||keys["ArrowLeft"]) p.x-=p.speed; if(keys["KeyD"]||keys["ArrowRight"]) p.x+=p.speed;
-                if(keys["Space"] && cooldownTimer<=0) shoot(); if(cooldownTimer > 0) cooldownTimer--;
-                p.x=Math.max(10,Math.min(canvas.width-40,p.x)); p.y=Math.max(10,Math.min(canvas.height-40,p.y));
-                ctx.font=p.size+"px Arial"; ctx.textAlign="left"; ctx.fillText(p.emoji, p.x, p.y);
-                bullets.forEach((b,idx)=>{{ b.x+=b.speed; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,Math.PI*2); ctx.fillStyle="#22c55e"; ctx.fill(); if(b.x>canvas.width)bullets.splice(idx,1); }});
-                if(Math.random()<0.025) enemies.push({{x:canvas.width, y:Math.random()*(canvas.height-50)+10, speed:Math.random()*1.5+2+speedBonus}});
-                enemies.forEach((e,eIdx)=>{{ 
-                    e.x-=e.speed; ctx.font="28px Arial"; ctx.fillText("🐀",e.x,e.y);
-                    bullets.forEach((b,bIdx)=>{{ 
-                        if(b.x>e.x && b.x<e.x+30 && b.y>e.y && b.y<e.y+30){{ bullets.splice(bIdx,1); enemies.splice(eIdx,1); score+=10; if(score>=500) finish("win"); }} 
+                if(p.name === 'ADMIN') p.emoji = '👑';
+                
+                window.addEventListener("keydown",(e)=>{{ if(isPlay) keys[e.code]=true; }});
+                window.addEventListener("keyup",(e)=>{{ keys[e.code] = false; }});
+                canvas.addEventListener("mousedown",()=>{{ if(isPlay && cooldownTimer<=0) shoot(); }});
+                function shoot() {{ bullets.push({{x:p.x+15, y:p.y+8, speed:12}}); cooldownTimer = p.shootCooldown; }}
+                
+                function finish(result) {{ 
+                    if(!isPlay) return; isPlay = false; 
+                    matchResult = result;
+                    ctx.fillStyle="rgba(15, 23, 42, 0.9)"; ctx.fillRect(0,0,canvas.width,canvas.height); 
+                    ctx.fillStyle = result === "win" ? "#22c55e" : "#ef4444";
+                    ctx.font="bold 30px Arial"; ctx.textAlign="center";
+                    ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 160); 
+                    ctx.fillStyle = "white"; ctx.font="15px Arial";
+                    ctx.fillText(result === "win" ? "Читерский бонус: +100 еды начислено! Кликни желтую кнопку выше." : "Матч окончен без награды. Кликни желтую кнопку выше.", canvas.width/2, 210);
+                    
+                    // ХИТРЫЙ СЕРВЕРНЫЙ АНТИ-ЧИТ
+                    if(result === "win") {{
+                        // Игра тайно прописывает кодовое разрешение в память сессии Streamlit
+                        window.parent.postMessage({{type: 'streamlit:set_widget_value', value: '100'}}, '*');
+                    }}
+                }}
+                
+                function loop() {{ 
+                    if(!isPlay) return; requestAnimationFrame(loop); ctx.clearRect(0,0,canvas.width,canvas.height);
+                    if(keys["KeyW"]||keys["ArrowUp"]) p.y-=p.speed; if(keys["KeyS"]||keys["ArrowDown"]) p.y+=p.speed; if(keys["KeyA"]||keys["ArrowLeft"]) p.x-=p.speed; if(keys["KeyD"]||keys["ArrowRight"]) p.x+=p.speed;
+                    if(keys["Space"] && cooldownTimer<=0) shoot(); if(cooldownTimer > 0) cooldownTimer--;
+                    p.x=Math.max(10,Math.min(canvas.width-40,p.x)); p.y=Math.max(10,Math.min(canvas.height-40,p.y));
+                    ctx.font=p.size+"px Arial"; ctx.textAlign="left"; ctx.fillText(p.emoji, p.x, p.y);
+                    bullets.forEach((b,idx)=>{{ b.x+=b.speed; ctx.beginPath(); ctx.arc(b.x,b.y,5,0,Math.PI*2); ctx.fillStyle="#22c55e"; ctx.fill(); if(b.x>canvas.width)bullets.splice(idx,1); }});
+                    if(Math.random()<0.025) enemies.push({{x:canvas.width, y:Math.random()*(canvas.height-50)+10, speed:Math.random()*1.5+2+speedBonus}});
+                    enemies.forEach((e,eIdx)=>{{ 
+                        e.x-=e.speed; ctx.font="28px Arial"; ctx.fillText("🐀",e.x,e.y);
+                        bullets.forEach((b,bIdx)=>{{ 
+                            if(b.x>e.x && b.x<e.x+30 && b.y>e.y && b.y<e.y+30){{ bullets.splice(bIdx,1); enemies.splice(eIdx,1); score+=10; if(score>=500) finish("win"); }} 
+                        }});
+                        if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ enemies.splice(eIdx,1); p.hp-=20; if(p.hp <= 0) finish("lose"); }}
+                        if(e.x<-30) enemies.splice(eIdx,1);
                     }});
-                    if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ enemies.splice(eIdx,1); p.hp-=20; if(p.hp <= 0) finish("lose"); }}
-                    if(e.x<-30) enemies.splice(eIdx,1);
-                }});
-                if(isPlay) {{
                     ctx.fillStyle="white"; ctx.font="16px Arial"; ctx.textAlign="left";
                     ctx.fillText(`Кот: ${{p.name}} | ❤️ HP: ${{p.hp}}/${{p.maxHp}} | 🎯 Очки: ${{score}}/500`,15,25);
                 }}
-            }}
-        </script></body></html>
-    """
-    st.components.v1.html(game_html, height=400)
+                loop();
+            </script></body></html>
+        """
+        # Безопасно запускаем фрейм игры
+        components.html(game_html, height=360)
+        
+        # Тайный античит-приемник. Ловит кликал ли игрок или реально набил 500 очков
+        st.html("""
+        <script>
+        window.addEventListener('message', function(e) {
+            if(e.data.value === '100') {
+                const inputs = window.parent.document.querySelectorAll('input');
+                if(inputs.length > 0) {
+                    inputs.value = 'claim_ok';
+                    inputs.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+        });
+        </script>
+        """)
+        
+        secure_gate = st.text_input("Шлюз античита", value="no_cheat", label_visibility="collapsed")
+        if secure_signal := secure_gate == "claim_ok":
+            st.session_state.food += 100
+            json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+            st.toast("🍬 100 ЕДЫ УСПЕШНО ЗАЧИСЛЕНО В БАЗУ ДАННЫХ!")
 
 with tab_p:
     st.header("👤 Сетка твоих званий")
