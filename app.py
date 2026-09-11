@@ -21,12 +21,11 @@ if not st.session_state.user:
     u = st.text_input("Логин:").strip().lower()
     p = st.text_input("Пароль:", type="password").strip()
     db = load_db()
-    
     if m == "Регистрация" and st.button("🆕 СОЗДАТЬ АККАУНТ", use_container_width=True):
         if u and p and u not in db:
             db[u] = {"p": p, "f": 100, "r": "начальный"}
             json.dump(db, open(F, "w"))
-            st.success("Успех! Теперь выберите 'Войти'.")
+            st.success("Успех! Выберите 'Войти'.")
         else: st.error("Ошибка!")
     elif m == "Войти" and st.button("🔓 ВОЙТИ В ИГРУ", use_container_width=True):
         if u in db and db[u]["p"] == p:
@@ -36,7 +35,6 @@ if not st.session_state.user:
         else: st.error("Ошибка авторизации!")
     st.stop()
 
-# --- СЕССИЯ ИГРОКА ---
 u, db = st.session_state.user, load_db()
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 idx = list(RANKS.keys()).index(st.session_state.rank)
@@ -53,32 +51,23 @@ elif "status" in st.query_params:
     st.session_state.play = False
     st.rerun()
 
-# ИСПРАВЛЕНО: st.session_state.current_rank заменен на правильный st.session_state.rank
 st.sidebar.markdown(f"👤 Аккаунт: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.rank.upper()}**")
 
-if idx < len(RANKS) - 1 and st.sidebar.button(f"🎖️ АПНУТЬ РАНГ ЗА {RANKS[list(RANKS.keys())[idx+1]]}"):
-    next_r = list(RANKS.keys())[idx+1]
-    if st.session_state.food >= RANKS[next_r]:
-        st.session_state.food -= RANKS[next_r]
-        st.session_state.rank = next_r
-        db[u]["f"], db[u]["r"] = st.session_state.food, next_r
-        json.dump(db, open(F, "w"))
-        st.rerun()
-
-if st.sidebar.button("🚪 Выйти"):
-    st.session_state.user = None
-    st.rerun()
-
-# ================= 2. МЕНЮ ВЫБОР РЕЖИМА ИГРЫ =================
+# ================= 2. ВЫБОР РЕЖИМА И ПЕРСОНАЖА =================
 if not st.session_state.play:
     st.title("🌐 Игровое меню CatStrike 2D")
-    role = st.radio("Выберите режим игры:", ["🏃 Одиночный матч (Соло)", "🔵 Игрок 1 (Хост комнаты)", "🟡 Игрок 2 (Подключиться к другу)"], horizontal=True)
+    
+    # ВОЗВРАЩЕНО: Официальный селект выбора твоего кота
+    chosen_hero = st.selectbox("Выбери своего боевого кота:", ["Vasya", "Bulya", "Murka", "Rizyk", "Tomas", "ADMIN"])
+    
+    role = st.radio("Режим игры:", ["🏃 Одиночный матч (Соло)", "🔵 Игрок 1 (Хост комнаты)", "🟡 Игрок 2 (Подключиться к другу)"], horizontal=True)
     room_id = st.text_input("ID Секретной Комнаты (для сети):", "cat777")
 
     if st.button("🚀 ЗАПУСТИТЬ АРЕНУ", use_container_width=True):
         st.session_state.play = True
         st.session_state.room = room_id
         st.session_state.role = role
+        st.session_state.hero = chosen_hero
         st.rerun()
 else:
     if st.button("↩️ ВЕРНУТЬСЯ В МЕНЮ", use_container_width=True):
@@ -87,6 +76,11 @@ else:
 
     is_solo = "true" if "Одиночный" in st.session_state.role else "false"
     p_num = "2" if "Игрок 2" in st.session_state.role else "1"
+    
+    # Характеристики под выбранного кота
+    hp = 2000 if st.session_state.hero == "ADMIN" else 120
+    cd = 2 if st.session_state.hero == "ADMIN" else 12 # Обычные коты стреляют одиночными с КД 12 кадров
+    skin = "👑" if st.session_state.hero == "ADMIN" else "🐱"
 
     game = f"""
     <!DOCTYPE html><html><body style="margin:0;background:#020617;text-align:center;color:white;font-family:Arial;">
@@ -97,7 +91,7 @@ else:
         const canvas=document.getElementById("a"),ctx=canvas.getContext('2d'),jw=document.getElementById("w"),jl=document.getElementById("l");
         let keys={{}}, b=[], en=[], s=0, play=true, t=0, solo={is_solo}, myId={p_num};
         
-        let p1={{x:50,y:150,h:120,m:120,e:'🐱'}};
+        let p1={{x:50,y:150,h:{hp},m:{hp},cd:{cd},e:'{skin}'}};
         let p2={{x:50,y:230,h:120,m:120,e:'🐯',active:!solo}};
         
         window.addEventListener("keydown",e=>{{keys[e.code]=true;}});
@@ -105,7 +99,9 @@ else:
         canvas.addEventListener("mousedown",shoot);
         
         function shoot() {{ 
-            if(play) b.push({{x:(solo || myId==1?p1.x:p2.x)+20, y:(solo || myId==1?p1.y:p2.y)+10, id:solo?1:myId}}); 
+            if(!play || t>0) return;
+            b.push({{x:(solo || myId==1?p1.x:p2.x)+20, y:(solo || myId==1?p1.y:p2.y)+10, id:solo?1:myId}}); 
+            t = (solo || myId==1) ? p1.cd : 12; // Включаем задержку выстрела
         }}
         
         function finish(r){{play=false;ctx.fillStyle="rgba(0,0,0,0.8)";ctx.fillRect(0,0,650,340);ctx.fillStyle="white";ctx.font="25px Arial";ctx.fillText("МАТЧ ОКОНЧЕН",240,165);const url=window.parent.location.origin+window.parent.location.pathname;if(r=='win'){{jw.href=url+"?secure_token=cat_win_777";jw.style.display="block";}}else{{jl.href=url+"?status=l";jl.style.display="block";}}}}
@@ -118,16 +114,20 @@ else:
         }}
         
         function loop(){{if(!play)return;requestAnimationFrame(loop);ctx.clearRect(0,0,650,340);
+            
+            // Ограничение темпа стрельбы для удержания Пробела
+            if(t>0) t--;
+            
             if(solo || myId == 1){{
                 if(keys["KeyW"]||keys["ArrowUp"]) p1.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p1.y+=4;
                 if(keys["KeyA"]||keys["ArrowLeft"]) p1.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p1.x+=4;
-                if(keys["Space"] && t<=0) {{ shoot(); t=12; }} if(t>0) t--;
+                if(keys["Space"]) shoot();
                 p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y));
             }}
             if(!solo && myId == 2){{
                 if(keys["KeyW"]||keys["ArrowUp"]) p2.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p2.y+=4;
                 if(keys["KeyA"]||keys["ArrowLeft"]) p2.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p2.x+=4;
-                if(keys["Space"] && t<=0) {{ shoot(); t=12; }} if(t>0) t--;
+                if(keys["Space"]) shoot();
                 p2.x=Math.max(0,Math.min(620,p2.x)); p2.y=Math.max(0,Math.min(310,p2.y));
             }}
             networkSync();
@@ -146,8 +146,8 @@ else:
                 if(e.x<-20)en.splice(i,1);
             }});
             ctx.fillStyle="white"; ctx.font="14px Arial";
-            if(solo) ctx.fillText(`Режим: СОЛО | ❤️ HP: ${{p1.h}} | 🎯 Очки: ${{s}}/500`,10,20);
-            else ctx.fillText(`Сеть | ${{myId==1?'🐱 P1':'🐯 P2'}} | Комната: ${{score=0, room_id}} | Очки: ${{s}}/500`,10,20);
+            if(solo) ctx.fillText(`Выбран: ${{p1.name}} | ❤️ HP: ${{p1.h}} | 🎯 Очки: ${{s}}/500`,10,20);
+            else ctx.fillText(`Сеть | ${{myId==1?'🐱 P1':'🐯 P2'}} | Боец: ${{myId==1?p1.name:p2.e}} | Очки: ${{s}}/500`,10,20);
         }}loop();
     </script></body></html>
     """
