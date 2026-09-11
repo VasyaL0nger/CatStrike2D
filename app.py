@@ -24,14 +24,20 @@ rank_list = list(RANKS.keys())
 current_idx = rank_list.index(st.session_state.current_rank)
 speed_bonus = current_idx * 0.4
 
-# ПРОВЕРКА НАГРАДЫ НА СЕРВЕРЕ PYTHON (АНТИЧИТ)
-if "win" in st.query_params:
-    st.session_state.food += 100
-    json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+# ПРОВЕРКА НАГРАДЫ: Принимаем данные из безопасной HTML-формы
+query_params = st.query_params
+if "status" in query_params:
+    status = query_params["status"]
+    if status == "win":
+        st.session_state.food += 100
+        json.dump({"food": st.session_state.food, "current_rank": st.session_state.current_rank}, open(SAVE_FILE, "w"))
+        st.success("🏆 ПОБЕДА! Начислено 100 еды!")
+        st.balloons()
+    elif status == "lose":
+        st.error("Вы проиграли. Попробуйте еще раз!")
+    
     st.query_params.clear()
     st.session_state.match_playing = False
-    st.success("🏆 ПОБЕДА! Начислено 100 еды!")
-    st.balloons()
     st.rerun()
 
 st.sidebar.markdown(f"## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**")
@@ -46,7 +52,7 @@ if current_idx < len(rank_list) - 1:
             st.rerun()
         else: st.sidebar.error("Не хватает еды!")
 
-tab_g, tab_p = st.tabs([" Anet-2D", " Профиль"])
+tab_g, tab_p = st.tabs(["🎮 Арена Боя", "👤 Профиль"])
 
 with tab_g:
     if not st.session_state.match_playing:
@@ -57,8 +63,7 @@ with tab_g:
             st.session_state.chosen_hero = chosen_cat
             st.rerun()
     else:
-        # УДОБНАЯ И ЧЕСТНАЯ КНОПКА ВЫХОДА ДЛЯ ПРОИГРЫША
-        if st.button("↩️ ПОКИНУТЬ МАТЧ (БЕЗ НАГРАДЫ)", use_container_width=True):
+        if st.button("↩️ ПОКИНУТЬ МАТЧ (ВЕРНУТЬСЯ В ЛОББИ)", use_container_width=True):
             st.session_state.match_playing = False
             st.rerun()
 
@@ -72,10 +77,21 @@ with tab_g:
             canvas {{ background:#090d16; border:3px solid #22c55e; border-radius:8px; margin:5px auto; }}
             .claim-btn {{ display:none; background:#22c55e; color:black; font-weight:bold; padding:12px; border-radius:6px; border:none; width:95%; max-width:450px; margin:10px auto; cursor:pointer; font-size:16px; }}
         </style></head><body>
+            
+            <!-- СКРЫТАЯ ВЗЛОМОСТОЙКАЯ ФОРМА ДЛЯ ОТПРАВКИ РЕЗУЛЬТАТА НА СЕРВЕР -->
+            <form id="secureForm" target="_parent" method="get">
+                <input type="hidden" name="status" id="formStatus" value="">
+            </form>
+
             <canvas id="arena" width="650" height="350"></canvas>
-            <button id="jsClaim" class="claim-btn" onclick="claimFood()">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</button>
+            <button id="jsClaim" class="claim-btn" onclick="sendResult('win')">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</button>
+            <button id="jsLose" class="claim-btn" style="background:#ef4444; color:white;" onclick="sendResult('lose')">❌ ВЫЙТИ В МЕНЮ</button>
+
             <script>
-                const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d"), jsClaim = document.getElementById("jsClaim");
+                const canvas = document.getElementById("arena"), ctx = canvas.getContext("2d");
+                const jsClaim = document.getElementById("jsClaim"), jsLose = document.getElementById("jsLose");
+                const secureForm = document.getElementById("secureForm"), formStatus = document.getElementById("formStatus");
+                
                 let p = {{x:100, y:160, size:30, emoji:'🐱', speed:4, hp:{hp_val}, maxHp:{hp_val}, name:'{st.session_state.chosen_hero}', shootCooldown:{cd_val}}};
                 let keys={{}}, bullets=[], enemies=[], score=0, isPlay=true, cooldownTimer=0;
                 let speedBonus = {speed_bonus}; 
@@ -94,16 +110,17 @@ with tab_g:
                     ctx.fillText(result === "win" ? "МАТЧ ЗАВЕРШЕН (ПОБЕДА!)" : "ВЫ ПОГИБЛИ", canvas.width/2, 160); 
                     
                     if(result === "win") {{
-                        jsClaim.style.display = "block"; // Показываем кнопку награды строго внутри фрейма игры!
+                        jsClaim.style.display = "block";
                     }} else {{
-                        ctx.fillStyle = "white"; ctx.font = "16px Arial";
-                        ctx.fillText("Нажмите кнопку 'Покинуть матч' выше над экраном.", canvas.width/2, 210);
+                        jsLose.style.display = "block";
                     }}
                 }}
                 
-                function claimFood() {{
-                    // Безопасный метод смены параметров фрейма, который Streamlit ловит мгновенно
-                    window.parent.location.href = window.parent.location.origin + window.parent.location.pathname + "?win=1";
+                // Железный метод отправки формы, который разрешен всеми браузерами мира
+                function sendResult(res) {{
+                    formStatus.value = res;
+                    secureForm.action = window.parent.location.origin + window.parent.location.pathname;
+                    secureForm.submit();
                 }}
                 
                 function loop() {{ 
@@ -128,7 +145,7 @@ with tab_g:
                 loop();
             </script></body></html>
         """
-        components.html(game_html, height=410)
+        components.html(game_html, height=420)
 
 with tab_p:
     st.header("👤 Сетка твоих званий")
