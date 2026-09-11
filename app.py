@@ -162,3 +162,8 @@ with tab_g:
                         if(e.x<p.x+25 && e.x+25>p.x && e.y<p.y+25 && e.y+25>p.y){{ enemies.splice(eIdx,1); p.hp-=20; if(p.hp<=0) finish("lose"); }}
                         if(e.x<-30) enemies.splice(eIdx,1);
                     }});
+ctx.fillStyle="white"; ctx.font="16px Arial"; ctx.fillText(Кот: ${{p.name}} | ❤️ HP: ${{p.hp}}/${{p.maxHp}} | 🎯 Очки: ${{score}}/500,15,25);}}loop();
+        st.components.v1.html(game_html, height=420)
+        with tab_p:
+        st.write("Сетка званий:")
+        for r_n, r_c in RANKS.items(): st.write(f"• {r_n.upper()} — {r_c} еды")
