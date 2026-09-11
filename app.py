@@ -5,20 +5,14 @@ import os, json
 st.set_page_config(page_title="CatStrike 2D", layout="centered")
 F = "db_users.json"
 
-
 def load_db():
     if os.path.exists(F):
-        try:
-            return json.load(open(F, "r"))
-        except:
-            pass
+        try: return json.load(open(F, "r"))
+        except: pass
     return {}
 
-
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "play" not in st.session_state:
-    st.session_state.play = False
+if "user" not in st.session_state: st.session_state.user = None
+if "play" not in st.session_state: st.session_state.play = False
 
 # ================= 1. АВТОРИЗАЦИЯ =================
 if not st.session_state.user:
@@ -27,40 +21,26 @@ if not st.session_state.user:
     u = st.text_input("Логин:").strip().lower()
     p = st.text_input("Пароль:", type="password").strip()
     db = load_db()
-
+    
     if m == "Регистрация" and st.button("🆕 СОЗДАТЬ АККАУНТ", use_container_width=True):
         if u and p and u not in db:
             db[u] = {"p": p, "f": 100, "r": "начальный"}
             json.dump(db, open(F, "w"))
             st.success("Успех! Теперь выберите 'Войти'.")
-        else:
-            st.error("Ошибка!")
+        else: st.error("Ошибка!")
     elif m == "Войти" and st.button("🔓 ВОЙТИ В ИГРУ", use_container_width=True):
         if u in db and db[u]["p"] == p:
             st.session_state.user = u
-            st.session_state.food, st.session_state.rank = (
-                db[u]["f"],
-                db[u]["r"],
-            )
+            st.session_state.food, st.session_state.rank = db[u]["f"], db[u]["r"]
             st.rerun()
-        else:
-            st.error("Ошибка авторизации!")
+        else: st.error("Ошибка авторизации!")
     st.stop()
 
+# --- СЕССИЯ ИГРОКА ---
 u, db = st.session_state.user, load_db()
-RANKS = {
-    "начальный": 0,
-    "котенок": 5000,
-    "кот": 10000,
-    "питомец": 15000,
-    "любимец": 20000,
-    "томас": 25000,
-    "рыжик": 30000,
-    "буля": 35000,
-    "мурка": 40000,
-    "вася": 50000,
-}
+RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 idx = list(RANKS.keys()).index(st.session_state.rank)
+speed_bonus = idx * 0.4
 
 if "secure_token" in st.query_params:
     db[u]["f"] += 100
@@ -73,23 +53,26 @@ elif "status" in st.query_params:
     st.session_state.play = False
     st.rerun()
 
-st.sidebar.markdown(
-    f"👤 Аккаунт: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.current_rank.upper()}**"
-)
+# ИСПРАВЛЕНО: st.session_state.current_rank заменен на правильный st.session_state.rank
+st.sidebar.markdown(f"👤 Аккаунт: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.rank.upper()}**")
 
-# ================= 2. ВЫБОР РЕЖИМА ИГРЫ =================
+if idx < len(RANKS) - 1 and st.sidebar.button(f"🎖️ АПНУТЬ РАНГ ЗА {RANKS[list(RANKS.keys())[idx+1]]}"):
+    next_r = list(RANKS.keys())[idx+1]
+    if st.session_state.food >= RANKS[next_r]:
+        st.session_state.food -= RANKS[next_r]
+        st.session_state.rank = next_r
+        db[u]["f"], db[u]["r"] = st.session_state.food, next_r
+        json.dump(db, open(F, "w"))
+        st.rerun()
+
+if st.sidebar.button("🚪 Выйти"):
+    st.session_state.user = None
+    st.rerun()
+
+# ================= 2. МЕНЮ ВЫБОР РЕЖИМА ИГРЫ =================
 if not st.session_state.play:
     st.title("🌐 Игровое меню CatStrike 2D")
-
-    role = st.radio(
-        "Выберите режим игры:",
-        [
-            "🏃 Одиночный матч (Соло)",
-            "🔵 Игрок 1 (Хост комнаты)",
-            "🟡 Игрок 2 (Подключиться к другу)",
-        ],
-        horizontal=True,
-    )
+    role = st.radio("Выберите режим игры:", ["🏃 Одиночный матч (Соло)", "🔵 Игрок 1 (Хост комнаты)", "🟡 Игрок 2 (Подключиться к другу)"], horizontal=True)
     room_id = st.text_input("ID Секретной Комнаты (для сети):", "cat777")
 
     if st.button("🚀 ЗАПУСТИТЬ АРЕНУ", use_container_width=True):
@@ -102,13 +85,12 @@ else:
         st.session_state.play = False
         st.rerun()
 
-    # Настройки режимов для JS
     is_solo = "true" if "Одиночный" in st.session_state.role else "false"
     p_num = "2" if "Игрок 2" in st.session_state.role else "1"
 
     game = f"""
     <!DOCTYPE html><html><body style="margin:0;background:#020617;text-align:center;color:white;font-family:Arial;">
-    <canvas id="a" width="650" height="340" style="background:#090d16;border:3px solid #22c55e;"></canvas>
+    <canvas id="a" width="650" height="340" style="background:#090d16;border:2px solid #22c55e;"></canvas>
     <a id="w" style="display:none;color:#22c55e;font-size:20px;text-decoration:none;" href="" target="_blank" onclick="setTimeout(()=>{{window.parent.location.reload();}},500)">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
     <a id="l" style="display:none;color:#ef4444;font-size:20px;text-decoration:none;" href="" target="_parent">❌ ВЫЙТИ</a>
     <script>
@@ -136,45 +118,36 @@ else:
         }}
         
         function loop(){{if(!play)return;requestAnimationFrame(loop);ctx.clearRect(0,0,650,340);
-            
-            // Если Соло или Игрок 1 — управляем белым котом
             if(solo || myId == 1){{
                 if(keys["KeyW"]||keys["ArrowUp"]) p1.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p1.y+=4;
                 if(keys["KeyA"]||keys["ArrowLeft"]) p1.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p1.x+=4;
                 if(keys["Space"] && t<=0) {{ shoot(); t=12; }} if(t>0) t--;
                 p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y));
             }}
-            
-            // Если Сеть и Игрок 2 — управляем полосатым котом
             if(!solo && myId == 2){{
                 if(keys["KeyW"]||keys["ArrowUp"]) p2.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p2.y+=4;
                 if(keys["KeyA"]||keys["ArrowLeft"]) p2.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p2.x+=4;
                 if(keys["Space"] && t<=0) {{ shoot(); t=12; }} if(t>0) t--;
                 p2.x=Math.max(0,Math.min(620,p2.x)); p2.y=Math.max(0,Math.min(310,p2.y));
             }}
-            
             networkSync();
-            
             ctx.font="25px Arial";
             if(p1.h>0) ctx.fillText(p1.e, p1.x, p1.y);
             if(p2.active && p2.h>0) ctx.fillText(p2.e, p2.x, p2.y);
             
             b.forEach((x,i)=>{{x.x+=10; ctx.fillStyle=x.id==1?"#22c55e":"#38bdf8"; ctx.fillRect(x.x,x.y,6,6); if(x.x>650)b.splice(i,1);}});
-            if(Math.random()<0.025)en.push({{x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+({idx*0.4})}});
-            
+            if(Math.random()<0.025)en.push({{x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+{speed_bonus}}});
             en.forEach((e,i)=>{{e.x-=e.s; ctx.font="20px Arial"; ctx.fillText("🐀",e.x,e.y);
                 b.forEach((x,j)=>{{if(x.x>e.x&&x.x<e.x+20&&x.y>e.y-15&&x.y<e.y+15){{b.splice(j,1);en.splice(i,1);s+=10;if(s>=500)finish('win');}}}});
                 if(e.x<p1.x+20&&e.x+20>p1.x&&e.y>p1.y-20&&e.y<p1.y+20){{ en.splice(i,1); p1.h-=20; }}
                 if(p2.active && e.x<p2.x+20&&e.x+20>p2.x&&e.y>p2.y-20&&e.y<p2.y+20){{ en.splice(i,1); p2.h-=20; }}
-                
                 if(p2.active) {{ if(p1.h<=0 && p2.h<=0) finish('lose'); }}
                 else {{ if(p1.h<=0) finish('lose'); }}
                 if(e.x<-20)en.splice(i,1);
             }});
-            
             ctx.fillStyle="white"; ctx.font="14px Arial";
             if(solo) ctx.fillText(`Режим: СОЛО | ❤️ HP: ${{p1.h}} | 🎯 Очки: ${{s}}/500`,10,20);
-            else ctx.fillText(`Сеть | ${{myId==1?'🐱 P1':'🐯 P2'}} | Комната: ${{score=0, "{room_id}"}} | Очки: ${{s}}/500`,10,20);
+            else ctx.fillText(`Сеть | ${{myId==1?'🐱 P1':'🐯 P2'}} | Комната: ${{score=0, room_id}} | Очки: ${{s}}/500`,10,20);
         }}loop();
     </script></body></html>
     """
