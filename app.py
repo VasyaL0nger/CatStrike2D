@@ -14,7 +14,7 @@ def load_db():
 if "user" not in st.session_state: st.session_state.user = None
 if "play" not in st.session_state: st.session_state.play = False
 
-# --- 1. АВТОРИЗАЦИЯ ПРИ СТАРТЕ ---
+# --- АВТОРИЗАЦИЯ ПРИ СТАРТЕ ---
 if not st.session_state.user:
     st.title("CatStrike 2D 🔐")
     m = st.radio("Режим:", ["Войти", "Регистрация"], horizontal=True)
@@ -38,9 +38,9 @@ if not st.session_state.user:
 u, db = st.session_state.user, load_db()
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 idx = list(RANKS.keys()).index(st.session_state.rank)
-speed_bonus = idx * 0.4
+sb = idx * 0.4 # Бонус сложности от ранга
 
-# ИСПРАВЛЕНО: ШЛЮЗ НАГРАДЫ БОЛЬШЕ НЕ СБРАСЫВАЕТ СЕССИЮ ИГРОКА (ЛОГИН НЕ НУЖЕН)
+# ШЛЮЗ НАГРАДЫ
 if "secure_token" in st.query_params:
     db[u]["f"] += 100
     json.dump(db, open(F, "w"))
@@ -57,7 +57,7 @@ if idx < len(RANKS) - 1 and st.sidebar.button(f"🎖️ АПНУТЬ РАНГ З
     next_r = list(RANKS.keys())[idx+1]
     if st.session_state.food >= RANKS[next_r]:
         st.session_state.food -= RANKS[next_r]
-        st.session_state.rank = next_r
+        st.session_state.rank = nxt_r
         db[u]["f"], db[u]["r"] = st.session_state.food, next_r
         json.dump(db, open(F, "w"))
         st.rerun()
@@ -66,7 +66,7 @@ if st.sidebar.button("🚪 Выйти"):
     st.session_state.user = None
     st.rerun()
 
-# --- 2. МЕНЮ ВЫБОРА РЕЖИМА И КОТА ---
+# --- МЕНЮ ВЫБОРА РЕЖИМА И КОТА ---
 if not st.session_state.play:
     st.title("🌐 Игровое меню CatStrike 2D")
     chosen_hero = st.selectbox("Выбери своего боевого кота:", ["Vasya", "Bulya", "Murka", "Rizyk", "Tomas", "ADMIN"])
@@ -98,11 +98,10 @@ else:
     <script>
         const canvas=document.getElementById("a"),ctx=canvas.getContext('2d'),jw=document.getElementById("w"),jl=document.getElementById("l");
         let keys={{}}, b=[], en=[], s=0, play=true, t=0, solo={is_solo}, myId={p_num};
-        let p1={{x:50,y:150,h:{hp},m:{hp},cd:{cd},e:'{skin}'}};
+        let p1={{x:50,y:150,h:{hp},m:{hp},cd:{cd},e:'{skin}',name:'{st.session_state.hero}'}};
         let p2={{x:50,y:230,h:120,m:120,e:'🐯',active:!solo}};
         window.addEventListener("keydown",e=>{{keys[e.code]=true;}});window.addEventListener("keyup",e=>{{keys[e.code]=false;}});
         
-        // ИСПРАВЛЕНО: Клик мыши и Пробел теперь вызывают ОДНУ и ту же функцию с одинаковым КД
         canvas.addEventListener("mousedown",()=>{{ if(play && t<=0) shoot(); }});
         function shoot() {{ 
             b.push({{x:(solo || myId==1?p1.x:p2.x)+20, y:(solo || myId==1?p1.y:p2.y)+10, id:solo?1:myId}}); 
@@ -121,7 +120,7 @@ else:
             if(solo || myId == 1){{
                 if(keys["KeyW"]||keys["ArrowUp"]) p1.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p1.y+=4;
                 if(keys["KeyA"]||keys["ArrowLeft"]) p1.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p1.x+=4;
-                if(keys["Space"] && t<=0) shoot(); // Стрельба на пробел теперь подчиняется таймеру t
+                if(keys["Space"] && t<=0) shoot();
                 p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y));
             }}
             if(!solo && myId == 2){{
@@ -134,7 +133,10 @@ else:
             if(p1.h>0) ctx.fillText(p1.e, p1.x, p1.y);
             if(p2.active && p2.h>0) ctx.fillText(p2.e, p2.x, p2.y);
             b.forEach((x,i)=>{{x.x+=10; ctx.fillStyle=x.id==1?"#22c55e":"#38bdf8"; ctx.fillRect(x.x,x.y,6,6); if(x.x>650)b.splice(i,1);}});
-            if(Math.random()<0.025)en.push({{x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+speed_bonus}});
+            
+            // ИСПРАВЛЕНО: Спавн крыс теперь считывает переменную сложности {sb}
+            if(Math.random()<0.025)en.push({{x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+{sb}}});
+            
             en.forEach((e,i)=>{{e.x-=e.s; ctx.font="20px Arial"; ctx.fillText("🐀",e.x,e.y);
                 b.forEach((x,j)=>{{if(x.x>e.x&&x.x<e.x+20&&x.y>e.y-15&&x.y<e.y+15){{b.splice(j,1);en.splice(i,1);s+=10;if(s>=500)finish('win');}}}});
                 if(e.x<p1.x+20&&e.x+20>p1.x&&e.y>p1.y-20&&e.y<p1.y+20){{ en.splice(i,1); p1.h-=20; }}
@@ -143,7 +145,7 @@ else:
                 if(e.x<-20)en.splice(i,1);
             }});
             ctx.fillStyle="white"; ctx.font="14px Arial";
-            if(solo) ctx.fillText(`Выбран: ${{p1.name}} | ❤️ HP: ${{p1.h}} | 🎯 Очки: ${{s}}/500`,10,20);
+            if(solo) ctx.fillText(`Кот: ${{p1.name}} | ❤️ HP: ${{p1.h}} | 🎯 Очки: ${{s}}/500`,10,20);
             else ctx.fillText(`Сеть | ${{myId==1?'🐱 P1':'🐯 P2'}} | Комната: ${{st.session_state.room}} | Очки: ${{s}}/500`,10,20);
         }}requestAnimationFrame(loopScene);
     </script></body></html>
