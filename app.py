@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import os, json
 
-st.set_page_config(page_title="CatStrike 2D", layout="centered")
+st.set_page_config(page_title="CatStrike 24D", layout="centered")
 F = "db_users.json"
 
 def load_db():
@@ -14,7 +14,7 @@ def load_db():
 if "user" not in st.session_state: st.session_state.user = None
 if "play" not in st.session_state: st.session_state.play = False
 
-# --- АВТОРИЗАЦИЯ ПРИ СТАРТЕ ---
+# --- АВТОРИЗАЦИЯ ---
 if not st.session_state.user:
     st.title("CatStrike 2D 🔐")
     m = st.radio("Режим:", ["Войти", "Регистрация"], horizontal=True)
@@ -38,7 +38,7 @@ if not st.session_state.user:
 u, db = st.session_state.user, load_db()
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 idx = list(RANKS.keys()).index(st.session_state.rank)
-sb = idx * 0.4 # Бонус сложности от ранга
+sb = idx * 0.4
 
 # ШЛЮЗ НАГРАДЫ
 if "secure_token" in st.query_params:
@@ -53,20 +53,8 @@ elif "status" in st.query_params:
     st.rerun()
 
 st.sidebar.markdown(f"👤 Аккаунт: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.rank.upper()}**")
-if idx < len(RANKS) - 1 and st.sidebar.button(f"🎖️ АПНУТЬ РАНГ ЗА {RANKS[list(RANKS.keys())[idx+1]]}"):
-    next_r = list(RANKS.keys())[idx+1]
-    if st.session_state.food >= RANKS[next_r]:
-        st.session_state.food -= RANKS[next_r]
-        st.session_state.rank = nxt_r
-        db[u]["f"], db[u]["r"] = st.session_state.food, next_r
-        json.dump(db, open(F, "w"))
-        st.rerun()
 
-if st.sidebar.button("🚪 Выйти"):
-    st.session_state.user = None
-    st.rerun()
-
-# --- МЕНЮ ВЫБОРА РЕЖИМА И КОТА ---
+# --- МЕНЮ ---
 if not st.session_state.play:
     st.title("🌐 Игровое меню CatStrike 2D")
     chosen_hero = st.selectbox("Выбери своего боевого кота:", ["Vasya", "Bulya", "Murka", "Rizyk", "Tomas", "ADMIN"])
@@ -87,7 +75,7 @@ else:
     is_solo = "true" if "Одиночный" in st.session_state.role else "false"
     p_num = "2" if "Игрок 2" in st.session_state.role else "1"
     hp = 2000 if st.session_state.hero == "ADMIN" else 120
-    cd = 2 if st.session_state.hero == "ADMIN" else 12
+    cd = 2 if st.session_state.hero == "ADMIN" else 15  # Нормальный КД для одиночных выстрелов Васи и компании
     skin = "👑" if st.session_state.hero == "ADMIN" else "🐱"
 
     game = f"""
@@ -100,12 +88,21 @@ else:
         let keys={{}}, b=[], en=[], s=0, play=true, t=0, solo={is_solo}, myId={p_num};
         let p1={{x:50,y:150,h:{hp},m:{hp},cd:{cd},e:'{skin}',name:'{st.session_state.hero}'}};
         let p2={{x:50,y:230,h:120,m:120,e:'🐯',active:!solo}};
-        window.addEventListener("keydown",e=>{{keys[e.code]=true;}});window.addEventListener("keyup",e=>{{keys[e.code]=false;}});
+        
+        window.addEventListener("keydown",e=>{{
+            if(play) {{
+                // Фикс пулемета: выстрел на Пробел сработает только если клавиша была НАЖАТА, а не зажата бесконечно
+                if(e.code === "Space" && !keys["Space"] && t<=0) {{ shoot(); }}
+                keys[e.code]=true;
+            }}
+        }});
+        window.addEventListener("keyup",e=>{{keys[e.code]=false;}});
         
         canvas.addEventListener("mousedown",()=>{{ if(play && t<=0) shoot(); }});
+        
         function shoot() {{ 
             b.push({{x:(solo || myId==1?p1.x:p2.x)+20, y:(solo || myId==1?p1.y:p2.y)+10, id:solo?1:myId}}); 
-            t = (solo || myId==1) ? p1.cd : 12; 
+            t = (solo || myId==1) ? p1.cd : 15; 
         }}
         
         function finish(r){{play=false;ctx.fillStyle="rgba(0,0,0,0.8)";ctx.fillRect(0,0,650,340);ctx.fillStyle="white";ctx.font="25px Arial";ctx.fillText("МАТЧ ОКОНЧЕН",240,165);const url=window.parent.location.origin+window.parent.location.pathname;if(r=='win'){{jw.href=url+"?secure_token=cat_win_777";jw.style.display="block";}}else{{jl.href=url+"?status=l";jl.style.display="block";}}}}
@@ -116,27 +113,23 @@ else:
             p2.y = Math.max(10, Math.min(300, p2.y)); p1.y = Math.max(10, Math.min(300, p1.y));
         }}
         function loopScene() {{ if(!play)return; requestAnimationFrame(loopScene); ctx.clearRect(0,0,650,340);
-            if(t>0) t--;
+            if(t>0) t--; // Уменьшаем задержку выстрела каждый кадр
+            
             if(solo || myId == 1){{
                 if(keys["KeyW"]||keys["ArrowUp"]) p1.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p1.y+=4;
                 if(keys["KeyA"]||keys["ArrowLeft"]) p1.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p1.x+=4;
-                if(keys["Space"] && t<=0) shoot();
                 p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y));
             }}
             if(!solo && myId == 2){{
                 if(keys["KeyW"]||keys["ArrowUp"]) p2.y-=4; if(keys["KeyS"]||keys["ArrowDown"]) p2.y+=4;
                 if(keys["KeyA"]||keys["ArrowLeft"]) p2.x-=4; if(keys["KeyD"]||keys["ArrowRight"]) p2.x+=4;
-                if(keys["Space"] && t<=0) shoot();
                 p2.x=Math.max(0,Math.min(620,p2.x)); p2.y=Math.max(0,Math.min(310,p2.y));
             }}
             networkSync(); ctx.font="25px Arial";
             if(p1.h>0) ctx.fillText(p1.e, p1.x, p1.y);
             if(p2.active && p2.h>0) ctx.fillText(p2.e, p2.x, p2.y);
             b.forEach((x,i)=>{{x.x+=10; ctx.fillStyle=x.id==1?"#22c55e":"#38bdf8"; ctx.fillRect(x.x,x.y,6,6); if(x.x>650)b.splice(i,1);}});
-            
-            // ИСПРАВЛЕНО: Спавн крыс теперь считывает переменную сложности {sb}
             if(Math.random()<0.025)en.push({{x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+{sb}}});
-            
             en.forEach((e,i)=>{{e.x-=e.s; ctx.font="20px Arial"; ctx.fillText("🐀",e.x,e.y);
                 b.forEach((x,j)=>{{if(x.x>e.x&&x.x<e.x+20&&x.y>e.y-15&&x.y<e.y+15){{b.splice(j,1);en.splice(i,1);s+=10;if(s>=500)finish('win');}}}});
                 if(e.x<p1.x+20&&e.x+20>p1.x&&e.y>p1.y-20&&e.y<p1.y+20){{ en.splice(i,1); p1.h-=20; }}
