@@ -209,16 +209,40 @@ with tab_arena:
         st.write("---")
         st.subheader("🎒 Снаряжение отряда (Выбери максимум 2 оружия в бой):")
         user_inventory = db[u].get("inv", [])
+            # ИСПРАВЛЕНО: Создаем вечную память для выбранных пушек, чтобы они не стирались при перезагрузке сайта
+        if "chosen_slots" not in st.session_state:
+            st.session_state.chosen_slots = ["стандарт"]
+
+        st.write("---")
+        st.subheader("🎒 Снаряжение отряда (Выбери максимум 2 оружия в бой):")
+        user_inventory = db[u].get("inv", [])
         
-        selected_weapons = []
+        current_selection = []
         if not user_inventory:
             st.info("У тебя нет оружия, пойдёшь со стандартными лапками!")
         else:
             for i_idx, item in enumerate(user_inventory):
                 is_selected = st.checkbox(f"🔘 {item['w'].upper()} | {item['s']}", key=f"equip_{i_idx}")
                 if is_selected:
-                    selected_weapons.append(item["w"]) # Добавляем тип оружия (меч, автомат, ракетница и т.д.)
+                    current_selection.append(item["w"])
         
+        # Записываем выбор в память сессии
+        if current_selection:
+            st.session_state.chosen_slots = current_selection
+        else:
+            st.session_state.chosen_slots = ["стандарт"]
+
+        if len(st.session_state.chosen_slots) > 2:
+            st.error("🚨 Кошачьи карманы не бездонные! Нельзя взять больше 2 пушек за раз.")
+            combat_ready = False
+        else:
+            combat_ready = True
+
+        if st.button("⚔ НАЧАТЬ МАТЧ НА АРЕНЕ", use_container_width=True, disabled=not combat_ready):
+            st.session_state.play, st.session_state.room, st.session_state.role, st.session_state.hero = True, rm, r, ch
+            # Фиксируем пушки намертво перед отправкой на арену
+            st.session_state.slot1 = st.session_state.chosen_slots
+            st.rerun()
         if len(selected_weapons) > 2:
             st.error("🚨 Кошачьи карманы не бездонные! Нельзя взять больше 2 пушек за раз.")
             combat_ready = False
