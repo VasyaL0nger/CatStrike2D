@@ -11,21 +11,19 @@ def load_db():
         except: pass
     return {}
 
-# Инициализация переменных сессии
 if "user" not in st.session_state: st.session_state.user = None
 if "play" not in st.session_state: st.session_state.play = False
 if "mobile_controls" not in st.session_state: st.session_state.mobile_controls = False
 if "last_login" not in st.session_state: st.session_state.last_login = 0.0
 
-# ЗАЩИТА 12 ЧАСОВ: Проверяем, сколько времени прошло с последнего действия
+# ЗАЩИТА 12 ЧАСОВ: Автовыход
 if st.session_state.user and st.session_state.last_login > 0:
-    elapsed_time = time.time() - st.session_state.last_login
-    if elapsed_time > 43200:  # 12 часов в секундах (12 * 60 * 60)
+    if time.time() - st.session_state.last_login > 43200:
         st.session_state.user = None
-        st.sidebar.warning("⏱️ Сессия устарела (прошло более 12 часов). Войдите заново!")
+        st.sidebar.warning("⏱️ Сессия устарела. Войдите заново!")
         st.rerun()
 
-# --- 1. АВТОРИЗАЦИЯ ПРИ СТАРТЕ ---
+# --- АВТОРИЗАЦИЯ ---
 if not st.session_state.user:
     st.title("CatStrike 2D 🔐")
     m = st.radio("Режим:", ["Войти", "Регистрация"], horizontal=True)
@@ -42,18 +40,16 @@ if not st.session_state.user:
         if u in db and db[u]["p"] == p:
             st.session_state.user = u
             st.session_state.food, st.session_state.rank = db[u]["f"], db[u]["r"]
-            st.session_state.last_login = time.time() # Фиксируем время входа
+            st.session_state.last_login = time.time()
             st.rerun()
         else: st.error("ОШИБКА АВТОРИЗАЦИИ!")
     st.stop()
 
-# Обновляем таймер активности игрока при каждом клике на сайте
 st.session_state.last_login = time.time()
-
 u, db = st.session_state.user, load_db()
 RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
 idx = list(RANKS.keys()).index(st.session_state.rank)
-sb_speed = idx * 0.4 # Скорость крыс вынесена в чистую переменную
+sb_speed = idx * 0.4
 
 if "secure_token" in st.query_params:
     db[u]["f"] += 100
@@ -66,7 +62,6 @@ elif "status" in st.query_params:
     st.session_state.play = False
     st.rerun()
 
-# --- СЛУЖЕБНАЯ БОКОВАЯ ПАНЕЛЬ ---
 st.sidebar.markdown(f"👤 Профиль: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.rank.upper()}**")
 st.sidebar.write("---")
 st.sidebar.subheader("⚙️ Настройки игры")
@@ -98,7 +93,6 @@ if not st.session_state.play:
         st.session_state.role = role
         st.session_state.hero = chosen_hero
         st.rerun()
-import streamlit as st
 # --- ИГРОВОЙ ХАБ ---
 if not st.session_state.play:
     st.title("🌐 Игровое меню CatStrike 2D")
@@ -123,113 +117,90 @@ else:
     cd = 2 if st.session_state.hero == "ADMIN" else 15
     skin = "👑" if st.session_state.hero == "ADMIN" else "🐱"
     show_mobile = "true" if st.session_state.mobile_controls else "false"
+    room_name = str(st.session_state.get('room', 'cat777'))
 
-    game = f"""
+    game = """
     <!DOCTYPE html><html><head><style>
-        body {{ margin:0; background:#020617; text-align:center; color:white; font-family:Arial; user-select:none; touch-action:none; }}
-        canvas {{ background:#090d16; border:2px solid #22c55e; border-radius:8px; margin:5px auto; display:block; touch-action:none; }}
-        .link {{ display:none; color:#22c55e; font-size:20px; text-decoration:none; }}
+        body { margin:0; background:#020617; text-align:center; color:white; font-family:Arial; user-select:none; touch-action:none; }
+        canvas { background:#090d16; border:2px solid #22c55e; border-radius:8px; margin:5px auto; display:block; touch-action:none; }
+        .link { display:none; color:#22c55e; font-size:20px; text-decoration:none; }
     </style></head><body>
         <canvas id="a" width="650" height="340"></canvas>
 
-        <a id="w" style="display:none;color:#22c55e;font-size:20px;text-decoration:none;" href="" target="_blank" onclick="setTimeout(()=>{{window.parent.location.reload();}},500)">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
+        <a id="w" style="display:none;color:#22c55e;font-size:20px;text-decoration:none;" href="" target="_blank" onclick="setTimeout(()=>{window.parent.location.reload();},500)">🏆 ЗАБРАТЬ НАГРАДУ (+100 ЕДЫ)</a>
         <a id="l" style="display:none;color:#ef4444;font-size:20px;text-decoration:none;" href="" target="_parent">❌ ВЫЙТИ</a>
         
         <script>
             const canvas=document.getElementById("a"),ctx=canvas.getContext('2d'),jw=document.getElementById("w"),jl=document.getElementById("l");
-            let keys={{}}, b=[], en=[], s=0, play=true, t=0, solo={is_solo}, myId={p_num}, mOn={show_mobile};
-            let p1={{x:50,y:150,h:{hp},m:{hp},cd:{cd},e:'{skin}',name:'{st.session_state.hero}'}};
-            let p2={{x:50,y:230,h:120,m:120,e:'🐯',active:!solo}};
+            let keys={}, b=[], en=[], s=0, play=true, t=0;
+            
+            let solo = """ + is_solo + """;
+            let myId = """ + p_num + """;
+            let mOn = """ + show_mobile + """;
+            let sb_speed = """ + str(sb_speed) + """;
+            
+            let p1={x:50, y:150, h: """ + str(hp) + """, m: """ + str(hp) + """, cd: """ + str(cd) + """, e: '""" + skin + """', name: '""" + str(st.session_state.hero) + """'};
+            let p2={x:50, y:230, h:120, m:120, e:'🐯', active:!solo};
             
             let joystickActive = false;
-            let joyCenter = {{x: 100, y: 240}}, joyStick = {{x: 100, y: 240}}, joyRadius = 50, stickRadius = 20;
+            let joyCenter = {x: 100, y: 240}, joyStick = {x: 100, y: 240}, joyRadius = 50, stickRadius = 20;
             let moveX = 0, moveY = 0;
             let joystickTouchId = null;
 
-            window.addEventListener("keydown",e=>{{ if(play){{ if(e.code==="Space"&&!keys["Space"]&&t<=0){{shoot();}} keys[e.code]=true; }} }});
-            window.addEventListener("keyup",e=>{{keys[e.code]=false;}});
-            canvas.addEventListener("mousedown",()=>{{ if(play && t<=0 && !mOn) shoot(); }});
+            window.addEventListener("keydown",e=>{ if(play){ if(e.code==="Space"&&!keys["Space"]&&t<=0){shoot();} keys[e.code]=true; } });
+            window.addEventListener("keyup",e=>{keys[e.code]=false;});
+            canvas.addEventListener("mousedown",()=>{ if(play && t<=0 && !mOn) shoot(); });
             
-            if(mOn) {{
-                canvas.addEventListener("touchstart", (e) => {{
+            if(mOn) {
+                canvas.addEventListener("touchstart", (e) => {
                     e.preventDefault();
-                    for(let i=0; i<e.changedTouches.length; i++) {{
+                    for(let i=0; i<e.changedTouches.length; i++) {
                         let tObj = e.changedTouches[i], rect = canvas.getBoundingClientRect();
                         let tx = tObj.clientX - rect.left, ty = tObj.clientY - rect.top;
                         
-                        if (tx < canvas.width / 2 && !joystickActive) {{
+                        if (tx < canvas.width / 2 && !joystickActive) {
                             joystickActive = true; joystickTouchId = tObj.identifier;
                             joyCenter.x = tx; joyCenter.y = ty; joyStick.x = tx; joyStick.y = ty;
-                        }} else if (tx >= canvas.width / 2 && t <= 0 && play) {{
+                        } else if (tx >= canvas.width / 2 && t <= 0 && play) {
                             shoot();
-                        }}
-                    }}
-                }});
+                        }
+                    }
+                });
 
-                canvas.addEventListener("touchmove", (e) => {{
+                canvas.addEventListener("touchmove", (e) => {
                     e.preventDefault(); if (!joystickActive) return;
-                    for(let i=0; i<e.touches.length; i++) {{
+                    for(let i=0; i<e.touches.length; i++) {
                         let tObj = e.touches[i];
-                        if (tObj.identifier === joystickTouchId) {{
+                        if (tObj.identifier === joystickTouchId) {
                             let rect = canvas.getBoundingClientRect();
                             let tx = tObj.clientX - rect.left, ty = tObj.clientY - rect.top;
                             let dx = tx - joyCenter.x, dy = ty - joyCenter.y, dist = Math.sqrt(dx*dx + dy*dy);
                             
-                            if (dist < joyRadius) {{ joyStick.x = tx; joyStick.y = ty; }} 
-                            else {{ joyStick.x = joyCenter.x + (dx / dist) * joyRadius; joyStick.y = joyCenter.y + (dy / dist) * joyRadius; }}
+                            if (dist < joyRadius) { joyStick.x = tx; joyStick.y = ty; } 
+                            else { joyStick.x = joyCenter.x + (dx / dist) * joyRadius; joyStick.y = joyCenter.y + (dy / dist) * joyRadius; }
                             moveX = (joyStick.x - joyCenter.x) / joyRadius; moveY = (joyStick.y - joyCenter.y) / joyRadius;
-                        }}
-                    }}
-                }});
+                        }
+                    }
+                });
 
-                canvas.addEventListener("touchend", (e) => {{
+                canvas.addEventListener("touchend", (e) => {
                     e.preventDefault();
-                    for(let i=0; i<e.changedTouches.length; i++) {{
-                        if (e.changedTouches[i].identifier === joystickTouchId) {{
+                    for(let i=0; i<e.changedTouches.length; i++) {
+                        if (e.changedTouches[i].identifier === joystickTouchId) {
                             joystickActive = false; joystickTouchId = null; moveX = 0; moveY = 0;
-                        }}
-                    }}
-                }});
-                canvas.addEventListener("touchcancel", (e) => {{ joystickActive = false; joystickTouchId = null; moveX = 0; moveY = 0; }});
-            }}
-                   function shoot() {{ 
-                let bx = p1.x + 20;
-                let by = p1.y + 10;
-                let bid = 1;
-                
-                if (!solo && myId == 2) {{
-                    bx = p2.x + 20;
-                    by = p2.y + 10;
-                    bid = 2;
-                }}
-                b.push({{x: bx, y: by, id: bid}}); 
-                
-                if (solo || myId == 1) {{
-                    t = p1.cd;
-                }} else {{
-                    t = 15;
-                }}
-            }}
-
+                        }
+                    }
+                });
+                canvas.addEventListener("touchcancel", (e) => { joystickActive = false; joystickTouchId = null; moveX = 0; moveY = 0; });
+            }
+            function shoot() { 
+                let bx = p1.x + 20; let by = p1.y + 10; let bid = 1;
+                if (!solo && myId == 2) { bx = p2.x + 20; by = p2.y + 10; bid = 2; }
+                b.push({x: bx, y: by, id: bid}); 
+                t = (solo || myId == 1) ? p1.cd : 15; 
+            }
             
-                        function finish(r) {{
-                play = false; 
-                ctx.fillStyle = "rgba(0,0,0,0.8)";
-                ctx.fillRect(0, 0, 650, 340);
-                ctx.fillStyle = "white";
-                ctx.font = "25px Arial";
-                ctx.fillText("МАТЧ ОКОНЧЕН", 240, 165);
-                
-                const url = window.parent.location.origin + window.parent.location.pathname;
-                if (r == "win") {{
-                    jw.href = url + "?secure_token=cat_win_777";
-                    jw.style.display = "block";
-                }} else {{
-                    jl.href = url + "?status=l";
-                    jl.style.display = "block";
-                }}
-            }}
-
+            function finish(r){play=false; ctx.fillStyle="rgba(0,0,0,0.8)";ctx.fillRect(0,0,650,340);ctx.fillStyle="white";ctx.font="25px Arial";ctx.fillText("МАТЧ ОКОНЧЕН",240,165);const url=window.parent.location.origin+window.parent.location.pathname;if(r=='win'){jw.href=url+"?secure_token=cat_win_777";jw.style.display="block";}else{jl.href=url+"?status=l";jl.style.display="block";}}
             
             function networkSync() {
                 if(solo) return;
@@ -284,7 +255,7 @@ else:
                     if(x.x>650)b.splice(i,1);
                 });
                 
-                if(Math.random()<0.025)en.push({x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+({sb_speed})});
+                if(Math.random()<0.025)en.push({x:650, y:Math.random()*280+20, s:Math.random()*1.5+2+sb_speed});
                 
                 en.forEach((e,i)=>{e.x-=e.s; ctx.font="20px Arial"; ctx.fillText("🐀",e.x,e.y);
                     b.forEach((x,j)=>{if(x.x>e.x&&x.x<e.x+20&&x.y>e.y-15&&x.y<e.y+15){b.splice(j,1);en.splice(i,1);s+=10;if(s>=500)finish('win');}});
@@ -302,9 +273,9 @@ else:
                 if(solo) {
                     ctx.fillText("Кот: " + p1.name + " | ❤️ HP: " + p1.h + " | 🎯 Очки: " + s + "/500", 10, 20);
                 } else {
-                    ctx.fillText("Сеть | Комната: " + "{st.session_state.get('room', 'cat777')}" + " | Очки: " + s + "/500", 10, 20);
-                }}requestAnimationFrame(loopScene);
+                    ctx.fillText("Сеть | Комната: " + '""" + room_name + """' + " | Очки: " + s + "/500", 10, 20);
+                }
+            }requestAnimationFrame(loopScene);
         </script></body></html>
     """
     components.html(game, height=360)
-
