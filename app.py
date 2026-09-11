@@ -192,12 +192,25 @@ else:
                 }});
                 canvas.addEventListener("touchcancel", (e) => {{ joystickActive = false; joystickTouchId = null; moveX = 0; moveY = 0; }});
             }}
-            function shoot() { 
-                let bx = p1.x + 20; let by = p1.y + 10; let bid = 1;
-                if (!solo && myId == 2) { bx = p2.x + 20; by = p2.y + 10; bid = 2; }
-                b.push({x: bx, y: by, id: bid}); 
-                t = (solo || myId == 1) ? p1.cd : 15; 
-            }
+                   function shoot() {{ 
+                let bx = p1.x + 20;
+                let by = p1.y + 10;
+                let bid = 1;
+                
+                if (!solo && myId == 2) {{
+                    bx = p2.x + 20;
+                    by = p2.y + 10;
+                    bid = 2;
+                }}
+                b.push({{x: bx, y: by, id: bid}}); 
+                
+                if (solo || myId == 1) {{
+                    t = p1.cd;
+                }} else {{
+                    t = 15;
+                }}
+            }}
+
             
             function finish(r){play=false; ctx.fillStyle="rgba(0,0,0,0.8)";ctx.fillRect(0,0,650,340);ctx.fillStyle="white";ctx.font="25px Arial";ctx.fillText("МАТЧ ОКОНЧЕН",240,165);const url=window.parent.location.origin+window.parent.location.pathname;if(r=='win'){jw.href=url+"?secure_token=cat_win_777";jw.style.display="block";}else{jl.href=url+"?status=l";jl.style.display="block";}}
             
