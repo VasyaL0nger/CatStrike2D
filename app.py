@@ -7,9 +7,17 @@ F = "db_users.json"
 
 def load_db():
     if os.path.exists(F):
-        try: return json.load(open(F, "r"))
-        except: pass
+        try:
+            with open(F, "r", encoding="utf-8") as file:
+                return json.load(file)
+        except:
+            # Защита от повреждения файла: если файл сломан, лечим его
+            return {}
     return {}
+
+def save_db(data):
+    with open(F, "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
 
 if "user" not in st.session_state: st.session_state.user = None
 if "play" not in st.session_state: st.session_state.play = False
@@ -17,14 +25,7 @@ if "mobile_controls" not in st.session_state: st.session_state.mobile_controls =
 if "last_login" not in st.session_state: st.session_state.last_login = 0.0
 if "dropped_item" not in st.session_state: st.session_state.dropped_item = None
 
-# ЗАЩИТА 12 ЧАСОВ: Автовыход
-if st.session_state.user and st.session_state.last_login > 0:
-    if time.time() - st.session_state.last_login > 43200:
-        st.session_state.user = None
-        st.sidebar.warning("⏱️ Сессия устарела. Войдите заново!")
-        st.rerun()
-
-# ЦЕННОСТЬ ПРЕДМЕТОВ ДЛЯ РАСЧЕТА ШАНСА В АПГРЕЙДЕРЕ
+# ЦЕННОСТЬ ПРЕДМЕТОВ ДЛЯ АПГРЕЙДЕРА
 SKINS_PRICE = {
     "ножик": 10, "меч 'сакура'": 30, "меч коллекции 'ангел'": 60, "меч коллекции 'вася'": 100,
     "щит коллекции 'вася'": 20, "щит коллекции 'ангел'": 50, "щит имени були": 80,
@@ -48,68 +49,67 @@ def get_weapon_type(skin_name):
     if "кинжал" in skin_name: return "кинжал"
     return "когти"
 
-WEAPONS_POOL = {
-    "меч": ["ножик", "меч 'сакура'", "меч коллекции 'ангел'", "меч коллекции 'вася'"],
-    "щит": ["щит коллекции 'вася'", "щит коллекции 'ангел'", "щит имени були"],
-    "броня": ["броня 'пещерные обноски'", "броня коллекции 'ангел'", "броня коллекции 'вася'", "броня принца"],
-    "пистолет": ["пистолет 'дракон'", "пистолет коллекции 'вася'", "пистолет коллекции 'ангел'"],
-    "автомат": ["автомат 'градиент'", "автомат коллекции 'вася'", "автомат коллекции 'ангел'", "автомат 'леденец'"],
-    "ракетница": ["ракетница 'дружба'", "ракетница коллекции 'вася'", "ракетница коллекции 'ангел'", "ракетница 'одесские традиции'"],
-    "дрон": ["дрон 'томаса'", "дрон коллекции 'вася'", "дрон коллекции 'ангел'", "дрон 'БПЛА'"],
-    "кинжал": ["кинжал 'молния'", "кинжал коллекции 'вася'", "кинжал коллекции 'ангел'"],
-    "когти": ["когти рыжика", "когти коллекции 'вася'", "когти коллекции 'ангел'", "когти пантеры"]
-}
-
-# --- АВТОРИЗАЦИЯ ---
-if not st.session_state.user:
-    st.title("CatStrike 2D & Grader 🔐")
-    m = st.radio("Режим:", ["Войти", "Регистрация"], horizontal=True)
-    u = st.text_input("Логин:").strip().lower()
-    p = st.text_input("Пароль:", type="password").strip()
-    db = load_db()
-    if m == "Регистрация" and st.button("🆕 СОЗДАТЬ АККАУНТ", use_container_width=True):
-        if u and p and u not in db:
-            db[u] = {"p": p, "f": 100, "r": "начальный", "inv": [
-                {"w": "меч", "s": "ножик", "q": "Поношенное"},
-                {"w": "пистолет", "s": "пистолет коллекции 'вася'", "q": "Поношенное"}
-            ]}
-            json.dump(db, open(F, "w"))
-            st.success("УСПЕХ! ТЕПЕРЬ ВЫБЕРИТЕ 'ВОЙТИ'.")
-        else: st.error("ОШИБКА!")
-    elif m == "Войти" and st.button("🔓 ВОЙТИ В ШТАБ", use_container_width=True):
-        if u in db and db[u]["p"] == p:
-            st.session_state.user = u
-            st.session_state.food, st.session_state.rank = db[u]["f"], db[u]["r"]
-            st.session_state.last_login = time.time()
-            st.rerun()
-        else: st.error("ОШИБКА АВТОРИЗАЦИИ!")
-    st.stop()
-st.session_state.last_login = time.time()
-u, db = st.session_state.user, load_db()
-RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
-idx = list(RANKS.keys()).index(st.session_state.rank)
-sb_speed = idx * 0.4
-
-# ШЛЮЗ НАГРАДЫ И ДРОПА ПУШЕК ЗА ПОБЕДУ
+# --- ИСПРАВЛЕНО: ШЛЮЗ НАГРАДЫ ПЕРЕНЕСЁН В САМЫЙ ВЕРХ И РАБОТАЕТ БЕЗОПАСНО ---
 if "secure_token" in st.query_params and st.query_params["secure_token"] == "cat_win_777":
-    db[u]["f"] += 100
-    all_skins = list(SKINS_PRICE.keys())
-    rand_s = random.choice(all_skins)
-    rand_w = get_weapon_type(rand_s)
-    new_drop = {"w": rand_w, "s": rand_s, "q": "После полевых испытаний"}
-    if "inv" not in db[u]: db[u]["inv"] = []
-    db[u]["inv"].append(new_drop)
-    json.dump(db, open(F, "w"))
-    st.session_state.dropped_item = f"🎁 {rand_w.upper()} | {rand_s}"
+    # Получаем сохраненного в сессии пользователя, чтобы не вызывать ошибку NameError
+    active_u = st.session_state.user
+    if active_u:
+        db_temp = load_db()
+        if active_u in db_temp:
+            db_temp[active_u]["f"] += 100
+            all_skins = list(SKINS_PRICE.keys())
+            rand_s = random.choice(all_skins)
+            rand_w = get_weapon_type(rand_s)
+            new_drop = {"w": rand_w, "s": rand_s, "q": "После полевых испытаний"}
+            if "inv" not in db_temp[active_u]: db_temp[active_u]["inv"] = []
+            db_temp[active_u]["inv"].append(new_drop)
+            save_db(db_temp)
+            st.session_state.dropped_item = f"🎁 {rand_w.upper()} | {rand_s}"
     st.query_params.clear()
-    st.html("<script>window.close();</script>")
-    st.stop()
+    st.rerun()
 elif "status" in st.query_params:
     st.query_params.clear()
     st.session_state.play = False
     st.rerun()
 
-# --- БОКОВАЯ ПАНЕЛЬ С РАНГАМИ И НАСТРОЙКАМИ ---
+# ЗАЩИТА 12 ЧАСОВ
+if st.session_state.user and st.session_state.last_login > 0:
+    if time.time() - st.session_state.last_login > 43200:
+        st.session_state.user = None
+        st.sidebar.warning("⏱️ Сессия устарела. Войдите заново!")
+        st.rerun()
+
+# --- АВТОРИЗАЦИЯ И РЕГИСТРАЦИЯ ---
+if not st.session_state.user:
+    st.title("CatStrike 2D & Grader 🔐")
+    m = st.radio("Режим:", ["Войти", "Регистрация"], horizontal=True)
+    u_input = st.text_input("Логин:").strip().lower()
+    p_input = st.text_input("Пароль:", type="password").strip()
+    db = load_db()
+    
+    if m == "Регистрация" and st.button("🆕 СОЗДАТЬ АККАУНТ", use_container_width=True):
+        if u_input and p_input and u_input not in db:
+            db[u_input] = {"p": p_input, "f": 100, "r": "начальный", "inv": [
+                {"w": "меч", "s": "ножик", "q": "Поношенное"},
+                {"w": "пистолет", "s": "пистолет коллекции 'вася'", "q": "Поношенное"}
+            ]}
+            save_db(db)
+            st.success("УСПЕХ! ТЕПЕРЬ ВЫБЕРИТЕ 'ВОЙТИ'.")
+        else: st.error("ОШИБКА! Логин пуст или уже занят.")
+    elif m == "Войти" and st.button("🔓 ВОЙТИ В ШТАБ", use_container_width=True):
+        if u_input in db and db[u_input]["p"] == p_input:
+            st.session_state.user = u_input
+            st.session_state.food, st.session_state.rank = db[u_input]["f"], db[u_input]["r"]
+            st.session_state.last_login = time.time()
+            st.rerun()
+        else: st.error("ОШИБКА АВТОРИЗАЦИИ!")
+    st.stop()
+
+st.session_state.last_login = time.time()
+u, db = st.session_state.user, load_db()
+RANKS = {"начальный":0, "котенок":5000, "кот":10000, "питомец":15000, "любимец":20000, "томас":25000, "рыжик":30000, "буля":35000, "мурка":40000, "вася":50000}
+idx = list(RANKS.keys()).index(st.session_state.rank)
+sb_speed = idx * 0.4
 st.sidebar.markdown(f"👤 Профиль: **{u.upper()}**\n## 🍖 Еда: `{st.session_state.food}`\n## 🎖️ Ранг: **{st.session_state.rank.upper()}**")
 st.sidebar.write("---")
 st.sidebar.subheader("⚙️ Настройки игры")
@@ -121,15 +121,16 @@ if idx < len(RANKS) - 1 and st.sidebar.button(f"🎖️ АПНУТЬ РАНГ З
         st.session_state.food -= RANKS[next_r]
         st.session_state.rank = next_r
         db[u]["f"], db[u]["r"] = st.session_state.food, next_r
-        json.dump(db, open(F, "w"))
+        save_db(db)
         st.rerun()
 
 if st.sidebar.button("🚪 Выйти"):
     st.session_state.user = None
     st.rerun()
 
-# --- СЕТКА ВКЛАДОК ---
+# --- СЕТКА ВКЛАДОК (АРЕНА + ВАСЯГРЕЙДЕР CS2) ---
 tab_arena, tab_grader = st.tabs(["🎮 Арена Боя", "🛠️ Верстак Василия"])
+
 # ================= НАСТОЯЩАЯ СИСТЕМА UPGRADER CS2 =================
 with tab_grader:
     st.title("🧰 Апгрейдер Скинов CS2 от Василия")
@@ -176,7 +177,7 @@ with tab_grader:
                 if roll <= final_chance:
                     new_weapon_type = get_weapon_type(target_skin_name)
                     db[u]["inv"][my_chosen_idx] = {"w": new_weapon_type, "s": target_skin_name, "q": "Прямо с завода"}
-                    json.dump(db, open(F, "w"))
+                    save_db(db)
                     st.balloons()
                     st.success(f"🏆 КОНТРАКТ СРАБОТАЛ! Василий скрафтил тебе: **{target_skin_name.upper()} (Прямо с завода)**!")
                     time.sleep(1.5)
@@ -184,7 +185,7 @@ with tab_grader:
                 else:
                     burned_item_name = my_item["s"]
                     db[u]["inv"].pop(my_chosen_idx)
-                    json.dump(db, open(F, "w"))
+                    save_db(db)
                     st.error(f"💀 АПГРЕЙД СОРВАЛСЯ! Твой скин **{burned_item_name}** сгорел в пламени горна...")
                     time.sleep(1.5)
                     st.rerun()
@@ -297,15 +298,13 @@ with tab_arena:
                 }
 
                 function finish(r){ play=false; ctx.fillStyle="rgba(0,0,0,0.8)"; ctx.fillRect(0,0,650,340); ctx.fillStyle="white"; ctx.font="25px Arial"; ctx.fillText("МАТЧ ОКОНЧЕН",240,165); const url=window.parent.location.origin+window.parent.location.pathname; if(r=='win'){ jw.href=url+"?secure_token=cat_win_777"; jw.style.display="block"; } else { jl.href=url+"?status=l"; jl.style.display="block"; } }
-                function networkSync() { if(solo)return; if(myId==1){ if(Math.random()<0.1) p2.y+=(Math.random()>0.5?15:-15); } else { if(Math.random()<0.05) p1.y+=(Math.random()>0.5?15:-15); } p2.y=Math.max(10,Math.min(300,p2.y)); p1.y=Math.max(10,Math.min(300,p1.y)); }
+                function networkSync() { if(solo) return; if(myId==1){ if(Math.random()<0.1) p2.y+=(Math.random()>0.5?15:-15); } else { if(Math.random()<0.05) p1.y+=(Math.random()>0.5?15:-15); } p2.y=Math.max(10,Math.min(300,p2.y)); p1.y=Math.max(10,Math.min(300,p1.y)); }
                 function drawJoystick() { if(!mOn||!joystickActive)return; ctx.beginPath(); ctx.arc(joyCenter.x,joyCenter.y,joyRadius,0,Math.PI*2); ctx.fillStyle="rgba(255,255,255,0.15)"; ctx.fill(); ctx.strokeStyle="rgba(34,197,94,0.5)"; ctx.lineWidth=2; ctx.stroke(); ctx.beginPath(); ctx.arc(joyStick.x,joyStick.y,stickRadius,0,Math.PI*2); ctx.fillStyle="rgba(34,197,94,0.7)"; ctx.fill(); }
                 
                 function loopScene() { if(!play)return; requestAnimationFrame(loopScene); ctx.clearRect(0,0,650,340); if(t>0)t--;
                     if(solo||myId==1){ if(mOn&&joystickActive){ p1.x+=moveX*4; p1.y+=moveY*4; } else { if(keys["KeyW"]||keys["ArrowUp"])p1.y-=4; if(keys["KeyS"]||keys["ArrowDown"])p1.y+=4; if(keys["KeyA"]||keys["ArrowLeft"])p1.x-=4; if(keys["KeyD"]||keys["ArrowRight"])p1.x+=4; } p1.x=Math.max(0,Math.min(620,p1.x)); p1.y=Math.max(0,Math.min(310,p1.y)); }
                     if(!solo&&myId==2){ if(mOn&&joystickActive){ p2.x+=moveX*4; p2.y+=moveY*4; } else { if(keys["KeyW"]||keys["ArrowUp"])p2.y-=4; if(keys["KeyS"]||keys["ArrowDown"])p2.y+=4; if(keys["KeyA"]||keys["ArrowLeft"])p2.x-=4; if(keys["KeyD"]||keys["ArrowRight"])p2.x+=4; } p2.x=Math.max(0,Math.min(620,p2.x)); p2.y=Math.max(0,Math.min(310,p2.y)); }
                     networkSync(); ctx.font="25px Arial"; if(p1.h>0)ctx.fillText(p1.e,p1.x,p1.y); if(p2.active&&p2.h>0)ctx.fillText(p2.e,p2.x,p2.y); drawJoystick();
-                    
-                    // ИСПРАВЛЕНО: Дроны Томаса теперь находят первую крысу и летят за ней
                     if(curW === "дрон") {
                         dTimer++;
                         if(dTimer > 180 && en.length > 0) {
